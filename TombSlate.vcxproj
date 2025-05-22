@@ -1,0 +1,317 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.props" Condition="Exists('packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.props')" />
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{6980543c-762c-4eb8-a27b-1f2c7868fe78}</ProjectGuid>
+    <RootNamespace>TombSlate</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>TombForge</ProjectName>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v143</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <IncludePath>ThirdParty\TRAODLE\TRAODLE;ThirdParty\Jolt;ThirdParty\libtiff\build\libtiff;ThirdParty\libtiff\libtiff;ThirdParty\imgui;ThirdParty\nlohjson\include\single_include;ThirdParty\stbi\include;ThirdParty\assimp\include;ThirdParty\GLAD\Release\include;ThirdParty\GLFW\Debug\include;ThirdParty\glm;$(IncludePath)</IncludePath>
+    <LibraryPath>ThirdParty\TRAODLE\x64\Debug;ThirdParty\Jolt\Lib;ThirdParty\libtiff\build\libtiff\Debug;ThirdParty\assimp\lib\Debug;ThirdParty\GLFW\Debug\lib;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_DEBUG_RENDERER;JPH_PROFILE_ENABLED;JPH_OBJECT_STREAM;JPH_USE_AVX2;JPH_USE_AVX;JPH_USE_SSE4_1;JPH_USE_SSE4_2;JPH_USE_LZCNT;JPH_USE_TZCNT;JPH_USE_F16C;JPH_USE_FMADD;DEVSLATE;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <UndefinePreprocessorDefinitions>USE_STATIC_MSVC_RUNTIME_LIBRARY</UndefinePreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>TRAODLE.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;Jolt.lib;tiffd.lib;assimp-vc143-mtd.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>assimp-vc143-mtd.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="Core\Config.cpp" />
+    <ClCompile Include="Core\Debug.cpp" />
+    <ClCompile Include="Core\Graphics\AABB.cpp" />
+    <ClCompile Include="Core\Graphics\Frustum.cpp" />
+    <ClCompile Include="Core\Graphics\Material.cpp" />
+    <ClCompile Include="Core\Graphics\Model.cpp" />
+    <ClCompile Include="Core\Graphics\Graphics.cpp" />
+    <ClCompile Include="Core\Graphics\Plane.cpp" />
+    <ClCompile Include="Engine\Animation\AnimMachine.cpp" />
+    <ClCompile Include="Engine\Assets\AnimationLoader.cpp" />
+    <ClCompile Include="Engine\Assets\GmxImport.cpp" />
+    <ClCompile Include="Engine\Assets\ModelImporter.cpp" />
+    <ClCompile Include="Core\Graphics\Texture.cpp" />
+    <ClCompile Include="Core\IO\DevIO.cpp" />
+    <ClCompile Include="Core\IO\FileIO.cpp" />
+    <ClCompile Include="Core\Maths\Maths.cpp" />
+    <ClCompile Include="Core\Maths\Transform.cpp" />
+    <ClCompile Include="Engine.cpp" />
+    <ClCompile Include="Engine\Animation\Animation.cpp" />
+    <ClCompile Include="Engine\Animation\AnimPlayer.cpp" />
+    <ClCompile Include="Engine\Animation\Skeleton.cpp" />
+    <ClCompile Include="Engine\Assets\AssetLoader.cpp" />
+    <ClCompile Include="Engine\Assets\TextureImport.cpp" />
+    <ClCompile Include="Engine\Levels\Level.cpp" />
+    <ClCompile Include="Engine\Levels\LevelManager.cpp" />
+    <ClCompile Include="Engine\Assets\MaterialLoader.cpp" />
+    <ClCompile Include="Engine\Assets\ModelLoader.cpp" />
+    <ClCompile Include="Engine\Physics\Physics.cpp" />
+    <ClCompile Include="Engine\Physics\PhysicsInterface.cpp" />
+    <ClCompile Include="Engine\Physics\PlayerFilters.cpp" />
+    <ClCompile Include="Engine\Player\Input.cpp" />
+    <ClCompile Include="Engine\Player\Lara.cpp" />
+    <ClCompile Include="Engine\Player\LaraController.cpp" />
+    <ClCompile Include="Engine\Player\LaraEnums.cpp" />
+    <ClCompile Include="Engine\Player\States\AirState.cpp" />
+    <ClCompile Include="Engine\Player\States\ClimbState.cpp" />
+    <ClCompile Include="Engine\Player\States\LaraState.cpp" />
+    <ClCompile Include="Engine\Player\States\LocomotionState.cpp" />
+    <ClCompile Include="Engine\Rendering\JoltDebugRenderer.cpp" />
+    <ClCompile Include="Engine\Rendering\Renderer.cpp" />
+    <ClCompile Include="Engine\Assets\TextureLoader.cpp" />
+    <ClCompile Include="Engine\State.cpp" />
+    <ClCompile Include="glad.c" />
+    <ClCompile Include="Main.cpp" />
+    <ClCompile Include="stbi_impl.cpp" />
+    <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="ThirdParty\imgui\imgui.cpp" />
+    <ClCompile Include="ThirdParty\imgui\imgui_demo.cpp" />
+    <ClCompile Include="ThirdParty\imgui\imgui_draw.cpp" />
+    <ClCompile Include="ThirdParty\imgui\imgui_tables.cpp" />
+    <ClCompile Include="ThirdParty\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="ThirdParty\imgui\misc\cpp\imgui_stdlib.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Core\Config.h" />
+    <ClInclude Include="Core\Debug.h" />
+    <ClInclude Include="Core\Graphics\AABB.h" />
+    <ClInclude Include="Core\Graphics\Cubemap.h" />
+    <ClInclude Include="Core\Graphics\Frustum.h" />
+    <ClInclude Include="Core\Graphics\Line.h" />
+    <ClInclude Include="Core\Graphics\Material.h" />
+    <ClInclude Include="Core\Graphics\Model.h" />
+    <ClInclude Include="Core\Graphics\Graphics.h" />
+    <ClInclude Include="Core\Graphics\Plane.h" />
+    <ClInclude Include="Core\Graphics\Shader.h" />
+    <ClInclude Include="Engine\Animation\AnimMachine.h" />
+    <ClInclude Include="Engine\Assets\AnimationLoader.h" />
+    <ClInclude Include="Engine\Assets\GmxImport.h" />
+    <ClInclude Include="Engine\Assets\ModelImporter.h" />
+    <ClInclude Include="Core\Graphics\Texture.h" />
+    <ClInclude Include="Core\IO\DevIO.h" />
+    <ClInclude Include="Core\IO\FileIO.h" />
+    <ClInclude Include="Core\Maths\Maths.h" />
+    <ClInclude Include="Core\Maths\Transform.h" />
+    <ClInclude Include="Engine.h" />
+    <ClInclude Include="Engine\Animation\Animation.h" />
+    <ClInclude Include="Engine\Animation\AnimPlayer.h" />
+    <ClInclude Include="Engine\Animation\Skeleton.h" />
+    <ClInclude Include="Engine\Assets\AssetLoader.h" />
+    <ClInclude Include="Engine\Assets\TextureImport.h" />
+    <ClInclude Include="Engine\Levels\Level.h" />
+    <ClInclude Include="Engine\Levels\LevelManager.h" />
+    <ClInclude Include="Engine\Assets\MaterialLoader.h" />
+    <ClInclude Include="Engine\Assets\ModelLoader.h" />
+    <ClInclude Include="Engine\Physics\Physics.h" />
+    <ClInclude Include="Engine\Physics\PhysicsInterface.h" />
+    <ClInclude Include="Engine\Physics\PlayerFilters.h" />
+    <ClInclude Include="Engine\Player\Input.h" />
+    <ClInclude Include="Engine\Player\Lara.h" />
+    <ClInclude Include="Engine\Player\LaraController.h" />
+    <ClInclude Include="Engine\Player\LaraEnums.h" />
+    <ClInclude Include="Engine\Player\States\AirState.h" />
+    <ClInclude Include="Engine\Player\States\ClimbState.h" />
+    <ClInclude Include="Engine\Player\States\LaraState.h" />
+    <ClInclude Include="Engine\Player\States\LocomotionState.h" />
+    <ClInclude Include="Engine\Rendering\JoltDebugRenderer.h" />
+    <ClInclude Include="Engine\Rendering\Renderer.h" />
+    <ClInclude Include="Engine\Assets\TextureLoader.h" />
+    <ClInclude Include="Engine\State.h" />
+    <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_opengl3.h" />
+    <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="ThirdParty\imgui\imconfig.h" />
+    <ClInclude Include="ThirdParty\imgui\imgui.h" />
+    <ClInclude Include="ThirdParty\imgui\imgui_internal.h" />
+    <ClInclude Include="ThirdParty\imgui\imstb_rectpack.h" />
+    <ClInclude Include="ThirdParty\imgui\imstb_textedit.h" />
+    <ClInclude Include="ThirdParty\imgui\imstb_truetype.h" />
+    <ClInclude Include="ThirdParty\imgui\misc\cpp\imgui_stdlib.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="Shaders\BaseVertexShader.glsl">
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Shaders\DepthFragmentShader.glsl" />
+    <None Include="Shaders\DepthVertexShader.glsl" />
+    <None Include="Shaders\GizmoFragmentShader.glsl" />
+    <None Include="Shaders\SkinnedVertexShader.glsl" />
+    <None Include="ThirdParty\imgui\misc\debuggers\imgui.gdb" />
+    <None Include="ThirdParty\imgui\misc\debuggers\imgui.natstepfilter" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\BaseFragmentShader.glsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="ThirdParty\imgui\misc\debuggers\imgui.natvis" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Shaders\ColorFragmentShader.glsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+      <FileType>Document</FileType>
+    </None>
+    <None Include="Shaders\LineVertexShader.glsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">4.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4.0</ShaderModel>
+      <FileType>Document</FileType>
+    </None>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.targets" Condition="Exists('packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.targets')" />
+  </ImportGroup>
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.props')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.props'))" />
+    <Error Condition="!Exists('packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.targets')" Text="$([System.String]::Format('$(ErrorText)', 'packages\Microsoft.Windows.CppWinRT.2.0.220531.1\build\native\Microsoft.Windows.CppWinRT.targets'))" />
+  </Target>
+</Project>
