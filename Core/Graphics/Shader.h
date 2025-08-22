@@ -8,13 +8,13 @@
 
 namespace TombForge
 {
-	struct Shader
-	{
-		std::string vertexSource{};
+    struct Shader
+    {
+        std::string vertexSource{};
 
-		std::string fragmentSource{};
+        std::string fragmentSource{};
 
-		ShaderHandle gpuHandle{};
-	};
+        ShaderHandle gpuHandle{};
+    };
 }
 

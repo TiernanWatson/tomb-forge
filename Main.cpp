@@ -4,14 +4,14 @@
 
 int main()
 {
-	std::cout << "TombForge v0.0.1" << std::endl;
+    std::cout << "TombForge v0.0.1" << std::endl;
 
-	TombForge::Engine engine;
+    TombForge::Engine engine;
 
-	while (engine.Update()) {}
+    while (engine.Update()) {}
 
-	std::cout << "TombForge terminated" << std::endl;
+    std::cout << "TombForge terminated" << std::endl;
 
-	return 0;
+    return 0;
 }
 

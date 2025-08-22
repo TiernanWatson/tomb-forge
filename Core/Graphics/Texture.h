@@ -10,52 +10,52 @@
 
 namespace TombForge
 {
-	using ColorByte = unsigned char;
+    using ColorByte = unsigned char;
 
-	enum class TextureFormat : uint8_t
-	{
-		R = 0,
-		RGB = 3,
-		RGBA = 4
-	};
+    enum class TextureFormat : uint8_t
+    {
+        R = 0,
+        RGB = 3,
+        RGBA = 4
+    };
 
-	enum class TextureDataType : uint8_t
-	{
-		Byte = 0,
-		Float
-	};
+    enum class TextureDataType : uint8_t
+    {
+        Byte = 0,
+        Float
+    };
 
-	enum class TextureFilter : uint8_t
-	{
-		Nearest = 0,
-		Bilinear,
-		Trilinear
-	};
+    enum class TextureFilter : uint8_t
+    {
+        Nearest = 0,
+        Bilinear,
+        Trilinear
+    };
 
-	struct Texture
-	{
-		std::string name{};
+    struct Texture
+    {
+        std::string name{};
 
-		std::vector<ColorByte> data{};
+        std::vector<ColorByte> data{};
 
-		uint32_t width{};
+        uint32_t width{};
 
-		uint32_t height{};
+        uint32_t height{};
 
-		TextureHandle gpuHandle{};
+        TextureHandle gpuHandle{};
 
-		TextureFormat format{};
+        TextureFormat format{};
 
-		TextureDataType type{};
+        TextureDataType type{};
 
-		TextureFilter filter{ TextureFilter::Trilinear };
+        TextureFilter filter{ TextureFilter::Trilinear };
 
-		inline bool IsValidData() const
-		{
-			// Attempts to check that the texture is initialized correctly
-			return data.size() == static_cast<size_t>(format) * width * height;
-		}
+        inline bool IsValidData() const
+        {
+            // Attempts to check that the texture is initialized correctly
+            return data.size() == static_cast<size_t>(format) * width * height;
+        }
 
-		bool SaveBinary() const;
-	};
+        bool SaveBinary() const;
+    };
 }

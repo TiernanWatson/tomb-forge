@@ -6,19 +6,19 @@
 
 namespace TombForge
 {
-	class MaterialLoader : public AssetLoader<Material>
-	{
-	public:
-		inline void SetTextureLoader(std::shared_ptr<TextureLoader> textureLoader)
-		{
-			m_textureLoader = textureLoader;
-		}
+    class MaterialLoader : public AssetLoader<Material>
+    {
+    public:
+        inline void SetTextureLoader(std::shared_ptr<TextureLoader> textureLoader)
+        {
+            m_textureLoader = textureLoader;
+        }
 
-	protected:
-		virtual std::shared_ptr<Material> Read(const std::string& name) override;
+    protected:
+        virtual std::shared_ptr<Material> Read(const std::string& name) override;
 
-	private:
-		std::shared_ptr<TextureLoader> m_textureLoader{};
-	};
+    private:
+        std::shared_ptr<TextureLoader> m_textureLoader{};
+    };
 }
 

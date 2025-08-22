@@ -5,7 +5,7 @@
 
 namespace TombForge::Input
 {
-	void SetWindow(GLFWwindow* window);
+    void SetWindow(GLFWwindow* window);
 
-	bool GetKey(int key, int stateIndex);
+    bool GetKey(int key, int stateIndex);
 }

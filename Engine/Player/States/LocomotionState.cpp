@@ -9,8 +9,8 @@
 
 namespace TombForge
 {
-	void LocomotionState::PreAnimationUpdate(LaraController& lara, float deltaTime)
-	{
+    void LocomotionState::PreAnimationUpdate(LaraController& lara, float deltaTime)
+    {
         const float forwardKey = Input::GetKey(GLFW_KEY_W, GLFW_PRESS) ? -1.0f : 0.0f;
         const float backKey = Input::GetKey(GLFW_KEY_S, GLFW_PRESS) ? 1.0f : 0.0f;
         const float leftKey = Input::GetKey(GLFW_KEY_A, GLFW_PRESS) ? -1.0f : 0.0f;
@@ -39,7 +39,7 @@ namespace TombForge
         m_desiredVelocity = targetMove;
 
         m_targetSpeed = glm::length(targetMove);
-	}
+    }
 
     void LocomotionState::UpdateAnimation(LaraController& lara, float deltaTime)
     {

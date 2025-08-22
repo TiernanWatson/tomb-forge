@@ -4,6 +4,8 @@
 #include <sstream>
 #include <filesystem>
 
+#include "../Debug.h"
+
 namespace TombForge
 {
     std::string FileIO::ReadEntireFile(const std::string& filePath)
@@ -130,5 +132,49 @@ namespace TombForge
             : filePath.find_last_of('.') - startIndex;
 
         return filePath.substr(startIndex, count);
+    }
+
+    std::string FileIO::GetRelativePath(const std::string& filePath, const std::string& basePath)
+    {
+        ASSERT(basePath.size() < filePath.size(), "%s is not larger than %s", filePath.c_str(), basePath.c_str());
+        return filePath.substr(basePath.size() + 1);
+    }
+
+    std::string FileIO::GetDirectory(const std::string& filePath)
+    {
+        if (filePath.empty())
+        {
+            return {};
+        }
+
+        if (std::filesystem::is_directory(filePath))
+        {
+            return filePath; // Already a directory
+        }
+
+        return GetBasePath(filePath);
+    }
+
+    void FileIO::CreateDirectory(const std::string& directory)
+    {
+        if (directory.empty())
+        {
+            LOG_ERROR("Trying to create directory with empty string");
+            return;
+        }
+
+        if (!std::filesystem::exists(directory))
+        {
+            std::filesystem::create_directories(directory);
+        }
+        else
+        {
+            LOG_WARNING("Trying to create directory %s that already exists", directory.c_str());
+        }
+    }
+
+    bool FileIO::IsDirectory(const std::string& path)
+    {
+        return std::filesystem::is_directory(path);
     }
 }

@@ -6,38 +6,38 @@
 
 namespace TombForge
 {
-	class PlayerBpFilter : public JPH::BroadPhaseLayerFilter
-	{
-	public:
-		inline virtual bool ShouldCollide(JPH::BroadPhaseLayer layer) const override
-		{
-			return m_canCollide;
-		}
+    class PlayerBpFilter : public JPH::BroadPhaseLayerFilter
+    {
+    public:
+        inline virtual bool ShouldCollide(JPH::BroadPhaseLayer layer) const override
+        {
+            return m_canCollide;
+        }
 
-		inline void SetCanCollide(bool value)
-		{
-			m_canCollide = value;
-		}
+        inline void SetCanCollide(bool value)
+        {
+            m_canCollide = value;
+        }
 
-	private:
-		bool m_canCollide{ true };
-	};
+    private:
+        bool m_canCollide{ true };
+    };
 
-	class PlayerLayerFilter : public JPH::ObjectLayerFilter
-	{
-	public:
-		inline virtual bool ShouldCollide(JPH::ObjectLayer layer) const override
-		{
-			return m_canCollide;
-		}
+    class PlayerLayerFilter : public JPH::ObjectLayerFilter
+    {
+    public:
+        inline virtual bool ShouldCollide(JPH::ObjectLayer layer) const override
+        {
+            return m_canCollide;
+        }
 
-		inline void SetCanCollide(bool value)
-		{
-			m_canCollide = value;
-		}
+        inline void SetCanCollide(bool value)
+        {
+            m_canCollide = value;
+        }
 
-	private:
-		bool m_canCollide{ true };
-	};
+    private:
+        bool m_canCollide{ true };
+    };
 }
 

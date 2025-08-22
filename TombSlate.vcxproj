@@ -148,6 +148,9 @@
     <ClCompile Include="Core\Graphics\Model.cpp" />
     <ClCompile Include="Core\Graphics\Graphics.cpp" />
     <ClCompile Include="Core\Graphics\Plane.cpp" />
+    <ClCompile Include="Core\ProjectSettings.cpp" />
+    <ClCompile Include="Core\Window.cpp" />
+    <ClCompile Include="Editor\Editor.cpp" />
     <ClCompile Include="Engine\Animation\AnimMachine.cpp" />
     <ClCompile Include="Engine\Assets\AnimationLoader.cpp" />
     <ClCompile Include="Engine\Assets\GmxImport.cpp" />
@@ -206,6 +209,9 @@
     <ClInclude Include="Core\Graphics\Graphics.h" />
     <ClInclude Include="Core\Graphics\Plane.h" />
     <ClInclude Include="Core\Graphics\Shader.h" />
+    <ClInclude Include="Core\ProjectSettings.h" />
+    <ClInclude Include="Core\Window.h" />
+    <ClInclude Include="Editor\Editor.h" />
     <ClInclude Include="Engine\Animation\AnimMachine.h" />
     <ClInclude Include="Engine\Assets\AnimationLoader.h" />
     <ClInclude Include="Engine\Assets\GmxImport.h" />

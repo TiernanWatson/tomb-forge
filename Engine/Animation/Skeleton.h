@@ -8,28 +8,28 @@
 
 namespace TombForge
 {
-	struct Bone
-	{
-		std::string name{}; // Human-friendly name
+    struct Bone
+    {
+        std::string name{}; // Human-friendly name
 
-		glm::mat4 offset{}; // Transforms model space vertices to bone space
+        glm::mat4 offset{}; // Transforms model space vertices to bone space
 
-		glm::mat4 transform{}; // Transform of the bone relative to parent (in bind pose)
+        glm::mat4 transform{}; // Transform of the bone relative to parent (in bind pose)
 
-		uint8_t parent{}; // Parent index in bones array
-	};
+        uint8_t parent{}; // Parent index in bones array
+    };
 
-	struct Skeleton
-	{
-		std::string name{};
+    struct Skeleton
+    {
+        std::string name{};
 
-		std::vector<Bone> bones{};
+        std::vector<Bone> bones{};
 
-		uint8_t FindBoneId(const std::string& boneName) const;
+        uint8_t FindBoneId(const std::string& boneName) const;
 
-		bool Load();
+        bool Load();
 
-		bool SaveBinary() const;
-	};
+        bool SaveBinary() const;
+    };
 }
 

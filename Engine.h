@@ -1,6 +1,7 @@
 #pragma once
 #include <memory>
 
+#include "Core/ProjectSettings.h"
 #include "Engine/Assets/AnimationLoader.h"
 #include "Engine/Assets/MaterialLoader.h"
 #include "Engine/Assets/ModelImporter.h"
@@ -21,88 +22,88 @@ struct GLFWwindow;
 
 namespace TombForge
 {
-	class Engine
-	{
-	public:
-		Engine();
-		Engine(const Engine&) = delete;
-		Engine(Engine&&) = delete;
-		~Engine();
+    class Engine
+    {
+    public:
+        Engine();
+        Engine(const Engine&) = delete;
+        Engine(Engine&&) = delete;
+        ~Engine();
 
-		Engine& operator=(const Engine&) = delete;
-		Engine& operator=(Engine&&) = delete;
+        Engine& operator=(const Engine&) = delete;
+        Engine& operator=(Engine&&) = delete;
 
-		bool Update();
+        bool Update();
 
-		void HandleMouseMove(float x, float y);
+        void HandleMouseMove(float x, float y);
 
-		void HandleMouseScroll(float scrollY);
+        void HandleMouseScroll(float scrollY);
 
-		void HandleFramebufferResize(int width, int height);
+        void HandleFramebufferResize(int width, int height);
 
 #if DEVSLATE
-		inline bool IsDevMode() const
-		{
-			return m_showDevWindow;
-		}
+        inline bool IsDevMode() const
+        {
+            return m_showDevWindow;
+        }
 
-		inline void SetDevMode(bool devMode)
-		{
-			m_showDevWindow = devMode;
-		}
+        inline void SetDevMode(bool devMode)
+        {
+            m_showDevWindow = devMode;
+        }
 
-		inline bool IsShowColliders() const
-		{
-			return m_showColliders;
-		}
+        inline bool IsShowColliders() const
+        {
+            return m_showColliders;
+        }
 
-		inline void ShowColliders(bool show)
-		{
-			m_showColliders = show;
-		}
+        inline void ShowColliders(bool show)
+        {
+            m_showColliders = show;
+        }
 
-		inline bool IsShowWireframe() const
-		{
-			return m_showMeshWireframe;
-		}
+        inline bool IsShowWireframe() const
+        {
+            return m_showMeshWireframe;
+        }
 
-		inline void ShowWireframe(bool show)
-		{
-			m_showMeshWireframe = show;
-		}
+        inline void ShowWireframe(bool show)
+        {
+            m_showMeshWireframe = show;
+        }
 
-		inline bool IsDrawNormals() const
-		{
-			return m_drawMeshNormals;
-		}
+        inline bool IsDrawNormals() const
+        {
+            return m_drawMeshNormals;
+        }
 
-		inline void DrawNormals(bool value)
-		{
-			m_drawMeshNormals = value;
-		}
+        inline void DrawNormals(bool value)
+        {
+            m_drawMeshNormals = value;
+        }
 
-		inline bool IsDrawOctree() const
-		{
-			return m_drawOctree;
-		}
+        inline bool IsDrawOctree() const
+        {
+            return m_drawOctree;
+        }
 
-		inline void DrawOctree(bool value)
-		{
-			m_drawOctree = value;
-		}
+        inline void DrawOctree(bool value)
+        {
+            m_drawOctree = value;
+        }
 
-		inline void RequestShutdown()
-		{
-			m_shouldQuit = true;
-		}
+        inline void RequestShutdown()
+        {
+            m_shouldQuit = true;
+        }
 
-		inline void RequestFrame(bool value)
-		{
-			m_wantsFrameAdvance = value;
-		}
+        inline void RequestFrame(bool value)
+        {
+            m_wantsFrameAdvance = value;
+        }
 #endif
 
-	private:
+    private:
 #if DEVSLATE
         enum class Axis : uint8_t
         {
@@ -120,147 +121,185 @@ namespace TombForge
             Off
         };
 
-		// Look at potentially refactoring this editor stuff out
+        // Look at potentially refactoring this editor stuff out
         struct EditorInfo
         {
-			AssetImportSession assetImport{};
+            ProjectSettings projectSettings{};
 
-			std::vector<std::string> importPaths{};
+            AssetImportSession assetImport{};
 
-			std::shared_ptr<Material> material{};
-			std::shared_ptr<Animation> animation{};
-			std::shared_ptr<Texture> texture{};
+            std::vector<std::string> importPaths{}; // Paths of files to import, used in the import window
+
+            std::shared_ptr<Material> material{}; // Material being edited in the editor, if any
+            std::shared_ptr<Animation> animation{}; // Animation being edited in the editor, if any
+            std::shared_ptr<Texture> texture{}; // Texture being edited in the editor, if any
+
+            std::string projectPath{}; // Currently loaded project directory (empty if none)
 
             size_t selectedObject{};
-			size_t selectedPointLight{};
-			size_t selectedMesh{};
+            size_t selectedPointLight{};
+            size_t selectedMesh{};
 
             Axis selectedAxis{};
             SelectMode selectMode{};
 
-			bool showLightingWindow : 1{};
-			bool showMaterialEditor : 1{};
-			bool showAnimEditor : 1{};
-			bool showModelImport : 1{};
-			bool showTextureImport : 1{};
-			bool showImportWindow : 1{};
-			bool showLaraWindow : 1{};
-			bool isDragging : 1{};
+            bool showLightingWindow : 1{};
+            bool showMaterialEditor : 1{};
+            bool showAnimEditor : 1{};
+            bool showModelImport : 1{};
+            bool showTextureImport : 1{};
+            bool showImportWindow : 1{};
+            bool showLaraWindow : 1{};
+            bool isDragging : 1{};
         };
 #endif
 
-		void InitializeCameraRotations();
+        void InitializeCameraRotations();
 
-		void RotateCameraToMouse(float deltaTime);
+        void RotateCameraToMouse(float deltaTime);
 
-		void ProcessLevelFrame(Level& level, float deltaTime);
+        void ProcessLevelFrame(Level& level, float deltaTime);
 
-		void GoToState(Lara& lara, LaraController& controller, LaraState newState);
+        void GoToState(Lara& lara, LaraController& controller, LaraState newState);
 
-		void UpdateLara(float deltaTime);
+        void UpdateLara(float deltaTime);
 
-		void UpdatePlayerPhysics(float deltaTime);
+        void UpdatePlayerPhysics(float deltaTime);
 
-		void HandleLaraAnimEvent(AnimEvent event);
+        void HandleLaraAnimEvent(AnimEvent event);
 
         void SetupDefaultShapes();
 
-		void SetupLara();
+        void SetupLara();
 
         void LoadLevel(const std::string& path);
 
         void DeleteLevelObject(size_t index);
 
-#if DEVSLATE
-        void CreateNewLevel();
+#if DEVSLATE // Editor functions
+        /// <summary>
+        /// Takes a path to a project folder and creates a new project with the default settings.
+        /// </summary>
+        /// <param name="path">Directory of project</param>
+        void CreateNewProject(const std::string& path);
 
-		void InitializeColliders();
+        /// <summary>
+        /// Takes a path to a project settings file and loads the project
+        /// </summary>
+        /// <param name="settingsPath">The main project file</param>
+        void LoadProject(const std::string& settingsPath);
 
+        /// <summary>
+        /// Saves the currently loaded project.
+        /// </summary>
+        void SaveProject();
+
+        /// <summary>
+        /// Takes a path to a Lara file and loads it if it exists
+        /// </summary>
+        /// <param name="laraPath">The Lara model</param>
+        void LoadLaraIfExists(const std::string& laraPath);
+
+        /// <summary>
+        /// Registers all colliders in the level with the physics system
+        /// </summary>
+        void InitializeColliders();
+
+        /// <summary>
+        /// Updates anything dependent on the object transform, such as the physics body
+        /// </summary>
+        /// <param name="index">The index of the object just updated in the Level struct</param>
         void OnObjectTransformUpdate(size_t index);
 
-		void OnLaraTransformUpdate();
+        /// <summary>
+        /// Updates anything dependent on the Lara transform, such as the physics body
+        /// </summary>
+        void OnLaraTransformUpdate();
 
+        /// <summary>
+        /// Draws the editor gizmos, such as the selected object transform handle
+        /// </summary>
         void DrawGizmos();
 
         void DrawConeArrow(const glm::mat4& transform, glm::vec4 color);
 
-		void DrawDevWindows();
+        void DrawDevWindows();
 
-		void DrawLightingWindow();
+        void DrawLightingWindow();
 
-		void DrawMaterialEditor();
+        void DrawMaterialEditor();
 
-		void DrawAnimEditor();
+        void DrawAnimEditor();
 
-		void DrawInspector();
+        void DrawInspector();
 
-		void DrawImportWindow();
+        void DrawImportWindow();
 
-		void DrawLaraWindow();
+        void DrawLaraWindow();
 #endif
 
-		Lara m_lara{};
-		Camera m_camera{};
-		LaraController m_laraController; // Used by Lara's state machine, hides variables in Lara
+        Lara m_lara{};
+        Camera m_camera{};
+        LaraController m_laraController; // Used by Lara's state machine, hides variables in Lara
 
-		std::vector<std::unique_ptr<LaraBaseState>> states{}; // Indexed by state id
+        std::vector<std::unique_ptr<LaraBaseState>> states{}; // Indexed by state id
 
         std::shared_ptr<Level> m_level{};
 
-		std::shared_ptr<ModelLoader> m_modelLoader{};
-		std::shared_ptr<MaterialLoader> m_materialLoader{};
-		std::shared_ptr<TextureLoader> m_textureLoader{};
-		std::shared_ptr<AnimationLoader> m_animationLoader{};
+        std::shared_ptr<ModelLoader> m_modelLoader{};
+        std::shared_ptr<MaterialLoader> m_materialLoader{};
+        std::shared_ptr<TextureLoader> m_textureLoader{};
+        std::shared_ptr<AnimationLoader> m_animationLoader{};
 
-		std::unique_ptr<LevelManager> m_levelLoader{};
-		std::unique_ptr<Renderer> m_renderer{};
+        std::unique_ptr<LevelManager> m_levelLoader{};
+        std::unique_ptr<Renderer> m_renderer{};
 
-		JPH::PhysicsSystem* m_physicsSystem{};
-		JPH::TempAllocatorImpl* m_physicsTmpAllocator{}; // For temp allocations during update
-		JPH::JobSystem* m_physicsJobSystem{};
+        JPH::PhysicsSystem* m_physicsSystem{};
+        JPH::TempAllocatorImpl* m_physicsTmpAllocator{}; // For temp allocations during update
+        JPH::JobSystem* m_physicsJobSystem{};
 
-		BPLayerInterfaceImpl m_bpLayerInterface{};
-		ObjectVsBroadPhaseLayerFilterImpl m_objVsBpLayerFilter{};
-		ObjectLayerPairFilterImpl m_objVsObjLayerFilter{};
-		PlayerBpFilter m_playerBpFilter{};
-		PlayerLayerFilter m_playerLayerFilter{};
+        BPLayerInterfaceImpl m_bpLayerInterface{};
+        ObjectVsBroadPhaseLayerFilterImpl m_objVsBpLayerFilter{};
+        ObjectLayerPairFilterImpl m_objVsObjLayerFilter{};
+        PlayerBpFilter m_playerBpFilter{};
+        PlayerLayerFilter m_playerLayerFilter{};
 
 #if JPH_DEBUG_RENDERER
-		JoltDebugRenderer* m_physicsDebugRenderer{};
+        JoltDebugRenderer* m_physicsDebugRenderer{};
 #endif
 
-		PhysicsInterface m_physicsInterface{}; // Passed to player states for interaction
+        PhysicsInterface m_physicsInterface{}; // Passed to player states for interaction
 
-		GLFWwindow* m_window{};
+        GLFWwindow* m_window{};
 
-		double m_previousTime{};
+        double m_previousTime{};
 
-		float m_cameraPitch{};
-		float m_cameraYaw{};
-		float m_cameraSpeed{ 1.0f };
-		float m_lastMouseX{}; // Used for the camera rotations, not edited by input directly
-		float m_lastMouseY{};
-		float m_mouseX{};
-		float m_mouseY{};
+        float m_cameraPitch{};
+        float m_cameraYaw{};
+        float m_cameraSpeed{ 1.0f };
+        float m_lastMouseX{}; // Used for the camera rotations, not edited by input directly
+        float m_lastMouseY{};
+        float m_mouseX{};
+        float m_mouseY{};
 
-		int m_windowWidth{};
-		int m_windowHeight{};
+        int m_windowWidth{};
+        int m_windowHeight{};
 
-		LaraState m_stateIndex{};
+        LaraState m_stateIndex{};
 
 #if DEVSLATE
         EditorInfo m_editInfo{};
-		double m_lastFpsUpdate{};
-		int m_fps{};
-		int m_framesThisSecond{};
-		bool m_showDevWindow{ true };
-		bool m_showColliders{};
-		bool m_showMeshWireframe{}; // Not the collider
-		bool m_drawMeshNormals{};
-		bool m_drawOctree{};
-		bool m_shouldQuit{};
-		bool m_wantsFrameAdvance{};
+        double m_lastFpsUpdate{};
+        int m_fps{};
+        int m_framesThisSecond{};
+        bool m_showDevWindow{ true };
+        bool m_showColliders{};
+        bool m_showMeshWireframe{}; // Not the collider
+        bool m_drawMeshNormals{};
+        bool m_drawOctree{};
+        bool m_shouldQuit{};
+        bool m_wantsFrameAdvance{};
 #endif
-	};
+    };
 }
 

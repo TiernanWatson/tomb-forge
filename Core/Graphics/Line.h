@@ -5,16 +5,16 @@
 
 namespace TombForge
 {
-	struct LineVertex
-	{
-		glm::vec3 point{};
-		glm::vec4 color{};
-	};
+    struct LineVertex
+    {
+        glm::vec3 point{};
+        glm::vec4 color{};
+    };
 
-	struct Line
-	{
-		LineVertex v0{};
-		LineVertex v1{};
-	};
+    struct Line
+    {
+        LineVertex v0{};
+        LineVertex v1{};
+    };
 }
 

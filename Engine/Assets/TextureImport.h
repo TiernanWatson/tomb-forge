@@ -4,5 +4,5 @@
 
 namespace TombForge
 {
-	bool ImportTexture(const std::string& path, Texture& texture);
+    bool ImportTexture(const std::string& path, Texture& texture);
 }
