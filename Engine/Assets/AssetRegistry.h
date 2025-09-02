@@ -225,6 +225,12 @@ namespace TombForge
             return;
         }
 
+        if (metaIt->second.isBuiltin)
+        {
+            LOG_ERROR("Tried to save built-in asset: %s", metaIt->second.assetPath.c_str());
+            return;
+        }
+
         WriteAsset<T>(*asset, metaIt->second);
     }
 

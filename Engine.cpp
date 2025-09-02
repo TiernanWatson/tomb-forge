@@ -700,37 +700,44 @@ namespace TombForge
 
     void Engine::SetupDefaultShapes()
     {
-        // Material
+        // Texture
 
         std::shared_ptr<Texture> debugTexture = std::make_shared<Texture>();
         GenerateDebugTexture(*debugTexture, glm::ivec4{ 20, 50, 200, 255 }, glm::ivec4{ 20, 20, 20, 255 });
-        m_assets.AddAsset(debugTexture, "Debug Texture", "");
+        debugTexture->name = "Debug Texture";
+        m_assets.AddAssetBuiltin(debugTexture);
+
+        // Material
 
         std::shared_ptr<Material> debugMaterial = std::make_shared<Material>();
         debugMaterial->diffuse = debugTexture;
         debugMaterial->AddFlag(MATERIAL_FLAG_DIFFUSE);
-        m_assets.AddAsset(debugMaterial, "Debug Material", "");
+        debugMaterial->name = "Debug Material";
+        m_assets.AddAssetBuiltin(debugMaterial);
 
         // Cube
 
         std::shared_ptr<Model> cube = std::make_shared<Model>();
         MakeUnitCube(*cube);
         cube->meshes[0].material = debugMaterial;
-        m_assets.AddAsset(cube, "Cube", "");
+        cube->name = "Cube";
+        m_assets.AddAssetBuiltin(cube);
 
         // Cone
 
         std::shared_ptr<Model> cone = std::make_shared<Model>();
         MakeUnitCone(*cone, 4);
         cone->meshes[0].material = debugMaterial;
-        m_assets.AddAsset(cone, "Cone", "");
+        cone->name = "Cone";
+        m_assets.AddAssetBuiltin(cone);
 
         // Arrow
 
         std::shared_ptr<Model> arrow = std::make_shared<Model>();
         MakeUnitArrow(*arrow);
         arrow->meshes[0].material = debugMaterial;
-        m_assets.AddAsset(arrow, "Arrow", "");
+        arrow->name = "Arrow";
+        m_assets.AddAssetBuiltin(arrow);
     }
 
     void Engine::SetupLara()
