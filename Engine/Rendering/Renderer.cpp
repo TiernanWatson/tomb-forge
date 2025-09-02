@@ -1,17 +1,15 @@
 #include "Renderer.h"
 
-#include "../../Core/Graphics/Graphics.h"
-#include "../../Core/Graphics/Material.h"
-#include "../../Core/Graphics/Texture.h"
+#include "../../Core/Graphics/Color.h"
 #include "../../Core/IO/FileIO.h"
 #include "../Animation/AnimPlayer.h"
 #include "../Levels/Level.h"
 #include "../Player/Lara.h"
+#include "Material.h"
 
+#include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/transform.hpp>
-#include <glm/geometric.hpp>
 
 namespace TombForge
 {
@@ -37,16 +35,6 @@ namespace TombForge
 
     bool Renderer::InitializeLevel(Level& level)
     {
-        for (auto& obj : level.staticObjects)
-        {
-            if (!obj.model)
-            {
-                continue;
-            }
-
-            InitializeModel(*obj.model);
-        }
-
         SubmitLightsTexture(level.pointLights);
 
         for (auto& obj : level.meshes)
@@ -89,21 +77,18 @@ namespace TombForge
 
     void Renderer::DeloadLevel(Level& level)
     {
-        for (auto& obj : level.staticObjects)
+        for (auto& mesh : level.meshes)
         {
-            for (auto& mesh : obj.model->meshes)
+            if (mesh.mesh->gpuHandle.IsValid())
             {
-                if (mesh.gpuHandle.IsValid())
-                {
-                    m_graphics.DestroyMeshInstance(mesh.gpuHandle);
-                }
+                m_graphics.DestroyMeshInstance(mesh.mesh->gpuHandle);
+            }
 
-                if (mesh.material && mesh.material->diffuse)
+            if (mesh.mesh->material && mesh.mesh->material->diffuse)
+            {
+                if (mesh.mesh->material->diffuse->gpuHandle.IsValid())
                 {
-                    if (mesh.material->diffuse->gpuHandle.IsValid())
-                    {
-                        //mesh.material->diffuse->gpuHandle = m_graphics.DestroyTextureInstance(*mesh.material->diffuse);
-                    }
+                    //mesh.mesh->material->diffuse->gpuHandle = m_graphics.DestroyTextureInstance(*mesh.material->diffuse);
                 }
             }
         }
@@ -121,7 +106,9 @@ namespace TombForge
         m_projectionMatrix = glm::perspective(camera.fovY, camera.aspect, camera.near, camera.far);
         m_graphics.SetMatrix4(m_skinnedLocations.projectMatrix, m_projectionMatrix);
 
-        m_graphics.SetVec3(m_skinnedLocations.ambientColor, level.ambientColor);
+        // Want to send linear values to the shader
+        const glm::vec3 ambientColor = SRGBToLinear(level.ambientColor);
+        m_graphics.SetVec3(m_skinnedLocations.ambientColor, ambientColor);
         m_graphics.SetFloat(m_skinnedLocations.ambientIntensity, level.ambientStrength);
 
         if (m_lightsTexture.gpuHandle.IsValid())
@@ -394,6 +381,7 @@ namespace TombForge
         m_lightsTexture.filter = TextureFilter::Nearest;
         m_lightsTexture.data.resize(textureSize);
 
+        // All the lights should already be in linear space, so no conversion here
         memcpy(m_lightsTexture.data.data(), lights.data(), textureSize);
 
         m_lightsTexture.gpuHandle = m_graphics.CreateTextureInstance(m_lightsTexture);
@@ -405,6 +393,11 @@ namespace TombForge
         std::vector<uint32_t>& opaque,
         std::vector<uint32_t>& transparent)
     {
+        if (nodeIndex >= m_octTree.nodes.size())
+        {
+            return;
+        }
+
         const auto& node = m_octTree.nodes[nodeIndex];
 
         if (FrustumIntersectsAABB(frustum, node.bounds))

@@ -5,16 +5,16 @@
 #include <vector>
 
 #include <assimp/Importer.hpp>
-#include <assimp/scene.h>
 #include <assimp/postprocess.h>
+#include <assimp/scene.h>
 
 #include <stb_image.h>
 
-#include "../../Core/Graphics/Material.h"
-#include "../../Core/Graphics/Texture.h"
 #include "../../Core/Debug.h"
 #include "../../Core/IO/FileIO.h"
 #include "../../Engine/Assets/TextureImport.h"
+#include "../Rendering/Material.h"
+#include "../Rendering/Texture.h"
 
 namespace TombForge
 {
@@ -30,6 +30,7 @@ namespace TombForge
     {
         glm::mat4 offset{};
         glm::mat4 transform{}; // Relative to parent
+        glm::mat4 globalTransform{}; // Absolute in model space
     };
 
     // File Functions
@@ -110,13 +111,29 @@ namespace TombForge
         const aiScene* scene,
         const aiNode* node,
         const ImportSettings& settings,
-        std::unordered_map<std::string, BoneInfo>& output
+        std::unordered_map<std::string, BoneInfo>& output,
+        glm::mat4 parentTransform = glm::mat4(1.0f)
     )
     {
-        if (std::string(node->mName.C_Str()) == "ROOT")
+        glm::mat4 nodeTransform = ConvertAssimpMatrixToGlm(node->mTransformation);
+        nodeTransform[3][0] *= settings.scale;
+        nodeTransform[3][1] *= settings.scale;
+        nodeTransform[3][2] *= settings.scale;
+
+        parentTransform = parentTransform * nodeTransform;
+
+        glm::vec3 euler = glm::eulerAngles(glm::quat_cast(nodeTransform)); // returns radians
+        float xDegrees = glm::degrees(euler.x);
+        LOG("Found node: %s with rotation %f and scale %f", node->mName.C_Str(), xDegrees, nodeTransform[0][0]);
+
+        // todo: More robust method of finding root bone (they're not skinned so Assimp doesn't pick it up as a bone).
+        // Will probably need to allow user to specify it. This also doesn't handle transforms above the root bone.
+        if (node->mName == aiString("ROOT") 
+            || node->mName == aiString("Bone_0")
+            || node->mName == aiString("Root"))
         {
-            output.emplace(std::make_pair(node->mName.C_Str(),
-                BoneInfo{ glm::mat4(1.0f), glm::mat4(1.0f)}));
+            output.emplace(
+                std::make_pair( node->mName.C_Str(), BoneInfo{ glm::inverse(parentTransform), parentTransform }));
         }
 
         for (unsigned int m = 0; m < node->mNumMeshes; m++)
@@ -137,19 +154,20 @@ namespace TombForge
                 offset[3][1] *= settings.scale;
                 offset[3][2] *= settings.scale;
 
-                glm::mat4 transformation = ConvertAssimpMatrixToGlm(bone->mNode->mTransformation);
-                transformation[3][0] *= settings.scale;
-                transformation[3][1] *= settings.scale;
-                transformation[3][2] *= settings.scale;
+                // Do not use the transform above because it messes up the skeleton
+                glm::mat4 boneTransform = ConvertAssimpMatrixToGlm(bone->mNode->mTransformation);
+                boneTransform[3][0] *= settings.scale; 
+                boneTransform[3][1] *= settings.scale;
+                boneTransform[3][2] *= settings.scale;
 
                 output.emplace(std::make_pair( bone->mNode->mName.C_Str(),
-                    BoneInfo{ offset, transformation } ));
+                    BoneInfo{ offset, boneTransform } ));
             }
         }
 
         for (unsigned int c = 0; c < node->mNumChildren; c++)
         {
-            FindAllBones(scene, node->mChildren[c], settings, output);
+            FindAllBones(scene, node->mChildren[c], settings, output, parentTransform);
         }
     }
 
@@ -187,6 +205,7 @@ namespace TombForge
         {
             const BoneInfo& info = boneSet.at(boneName);
 
+            // If there is any kind of global transform on the root bone, we need to bake it into the offset
             bones.emplace_back(boneName, info.offset, info.transform, parent);
             parent = static_cast<uint8_t>(bones.size() - 1);
         }
@@ -412,11 +431,13 @@ namespace TombForge
                 const std::string boneName = node->mNodeName.C_Str();
 
                 const uint8_t boneId = skeleton.FindBoneId(boneName);
-                if (boneId == -1)
+                if (boneId == 255)
                 {
                     LOG_ERROR("Bone %s not found in skeleton %s", boneName.c_str(), skeleton.name.c_str());
                     continue;
                 }
+
+                LOG("Importing animation for bone %s with p %i r %i s %i", boneName.c_str(), node->mNumPositionKeys, node->mNumRotationKeys, node->mNumScalingKeys);
 
                 BoneKeys& keys = result.keys[boneId];
                 keys.positions.reserve(node->mNumPositionKeys);
@@ -434,6 +455,7 @@ namespace TombForge
 
                 for (unsigned int s = 0; s < node->mNumScalingKeys; s++)
                 {
+                    // Don't scale this by the setting because we already scale the position
                     ScaleKey& key = keys.scales.emplace_back();
                     key.time = node->mScalingKeys[s].mTime;
                     key.value.x = node->mScalingKeys[s].mValue.x;
@@ -481,7 +503,11 @@ namespace TombForge
         Finish();
 
         Assimp::Importer& importer = m_importer->importer;
-        const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_FlipUVs | aiProcess_PopulateArmatureData);
+        const aiScene* scene = importer.ReadFile(path, 
+            aiProcess_Triangulate 
+            | aiProcess_FlipUVs 
+            | aiProcess_PopulateArmatureData 
+            | aiProcess_EmbedTextures);
         if (!scene)
         {
             LOG_ERROR("Failed to load %s", path);

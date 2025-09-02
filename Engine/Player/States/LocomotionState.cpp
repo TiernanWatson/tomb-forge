@@ -84,6 +84,10 @@ namespace TombForge
             {
                 lara.SetAnimation(LARA_ANIM_IDLE, 3.0f, true);
             }
+            else if (wantsToRun)
+            {
+                lara.SetAnimation(LARA_ANIM_RUN, 12.0f);
+            }
             else if (m_wantsToJump)
             {
                 lara.SetAnimation(LARA_ANIM_RUN_TO_JUMP_L, 3.0f);
@@ -95,6 +99,10 @@ namespace TombForge
             if (lara.AnimTimeLeft() < 3.0f)
             {
                 lara.SetAnimation(LARA_ANIM_RUN, 3.0f, true);
+            }
+            else if (wantsToWalk)
+            {
+                lara.SetAnimation(LARA_ANIM_WALK, 3.0f, true);
             }
             else if (!wantsToRun && !wantsToWalk)
             {
@@ -108,6 +116,10 @@ namespace TombForge
             {
                 lara.SetAnimation(LARA_ANIM_IDLE, 3.0f, true);
             }
+            else if (wantsToWalk)
+            {
+                lara.SetAnimation(LARA_ANIM_WALK, 12.0f, true);
+            }
             else if (m_wantsToJump)
             {
                 lara.SetAnimation(LARA_ANIM_RUN_TO_JUMP_L, 3.0f);
@@ -119,14 +131,13 @@ namespace TombForge
         case LARA_ANIM_JUMP_TO_FALL:
         case LARA_ANIM_FALL:
         {
-            glm::vec3 groundInput = m_desiredVelocity;
             if (wantsToRun)
             {
                 lara.SetAnimation(LARA_ANIM_FALL_TO_RUN, 1.0f);
             }
             else
             {
-                lara.SetAnimation(LARA_ANIM_IDLE);
+                lara.SetAnimation(LARA_ANIM_FALL_TO_IDLE, 1.0f);
             }
             break;
         }
@@ -138,6 +149,7 @@ namespace TombForge
             }
             break;
         }
+        case LARA_ANIM_FALL_TO_IDLE:
         case LARA_ANIM_CLIMB_UP:
         {
             if (lara.AnimTimeLeft() < 1.0f)

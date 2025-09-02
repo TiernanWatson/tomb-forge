@@ -23,10 +23,8 @@ namespace TombForge
         MATERIAL_FLAG_DIFFUSE_NORMAL = MATERIAL_FLAG_DIFFUSE | MATERIAL_FLAG_NORMAL
     };
 
-    struct Material
+    struct Material : public AssetBase
     {
-        std::string name{};
-
         std::shared_ptr<Texture> diffuse{};
 
         std::shared_ptr<Texture> normal{};
@@ -38,8 +36,6 @@ namespace TombForge
         ShaderHandle shader{};
 
         MaterialFlags flags{};
-
-        bool SaveJson() const;
 
         bool TestFlag(MaterialFlags flag) const;
 

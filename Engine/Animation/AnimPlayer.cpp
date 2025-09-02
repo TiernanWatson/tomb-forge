@@ -10,31 +10,34 @@
 
 namespace TombForge
 {
-    void AnimPlayer::Play(std::shared_ptr<const Animation> animPlayer, bool loop)
+    void AnimPlayer::Play(std::shared_ptr<const Animation> animation, bool loop)
     {
-        m_currentAnim.animPlayer = animPlayer;
-        m_currentAnim.previousRootPosition = glm::vec3{};
-        m_currentAnim.currentFrame = 0.0f;
-        m_currentAnim.loopCount = 0;
+        m_currentAnim.Clear();
+        m_currentAnim.animation = animation;
         m_currentAnim.shouldLoop = loop;
 
         m_isBlending = false;
+        m_wasInterrupted = false;
 
         Process(0.0f);
     }
 
-    void AnimPlayer::BlendTo(std::shared_ptr<const Animation> animPlayer, float frames, bool loop)
+    void AnimPlayer::BlendTo(std::shared_ptr<const Animation> animation, float frames, bool loop)
     {
         if (m_isBlending)
         {
-            //m_currentAnim = m_targetAnim;
+            // When a blend is interrupted, to avoid snapping, we blend from the current pose
+            m_wasInterrupted = true;
+            m_blendPose = m_finalPose;
+        }
+        else
+        {
+            m_previousAnim = m_currentAnim;
         }
 
-        m_targetAnim.animPlayer = animPlayer;
-        m_targetAnim.currentFrame = 0.0f;
-        m_targetAnim.previousRootPosition = glm::vec3{};
-        m_targetAnim.loopCount = 0;
-        m_targetAnim.shouldLoop = loop;
+        m_currentAnim.Clear();
+        m_currentAnim.animation = animation;
+        m_currentAnim.shouldLoop = loop;
 
         m_isBlending = true;
         m_blendTime = frames;
@@ -51,82 +54,87 @@ namespace TombForge
 
         if (m_isBlending)
         {
-            m_targetAnim.AdvanceFrame(deltaTime);
-
-            if (m_targetAnim.currentFrame > m_blendTime)
+            if (m_currentAnim.currentFrame > m_blendTime)
             {
                 m_isBlending = false;
-                m_currentAnim = m_targetAnim;
-                m_targetAnim.Clear();
+                m_wasInterrupted = false;
+                m_previousAnim.Clear();
+            }
+            else
+            {
+                m_previousAnim.AdvanceFrame(deltaTime);
             }
         }
 
         const bool extractRootMovement = m_rootMotionMode != RootMotionMode::Off;
         const bool extractRootRotation = m_rootMotionMode == RootMotionMode::On;
 
-        for (size_t boneIndex = 0; boneIndex < m_currentAnim.animPlayer->keys.size(); boneIndex++)
+        for (size_t boneIndex = 0; boneIndex < m_currentAnim.animation->keys.size(); boneIndex++)
         {
-            const BoneKeys& keys = m_currentAnim.animPlayer->keys[boneIndex];
+            const BoneKeys& keys = m_currentAnim.animation->keys[boneIndex];
 
-            // Position
+            Transform& poseTransform = m_finalPose.bones[boneIndex];
 
-            glm::vec3 position = GetPosition(keys.positions, m_currentAnim.currentFrame, m_defaultPositions[boneIndex]);
+            poseTransform.position = GetPosition(keys.positions, m_currentAnim.currentFrame, m_defaultPositions[boneIndex]);
             if (boneIndex == 0 && extractRootMovement)
             {
-                m_rootDelta = m_currentAnim.CalculateRootDelta(position);
-
-                // We don't want to animate the root bone if root motion is on
-                position = m_defaultPositions[boneIndex];
+                m_rootDelta = m_currentAnim.CalculateRootDelta(poseTransform.position);
+                poseTransform.position = m_defaultPositions[boneIndex];
             }
 
-            // Rotation
-            
-            glm::quat rotation = GetRotation(keys.rotations, m_currentAnim.currentFrame, m_defaultRotations[boneIndex]);
+            poseTransform.rotation = GetRotation(keys.rotations, m_currentAnim.currentFrame, m_defaultRotations[boneIndex]);
             if (boneIndex == 0 && extractRootRotation)
             {
-                m_rootRotDelta = m_currentAnim.CalculateRootRotDelta(rotation);
-
-                rotation = m_defaultRotations[boneIndex];
+                m_rootRotDelta = m_currentAnim.CalculateRootRotDelta(poseTransform.rotation);
+                poseTransform.rotation = m_defaultRotations[boneIndex];
             }
 
-            // Scale
-
-            glm::vec3 scale = GetScale(keys.scales, m_currentAnim.currentFrame, m_defaultScales[boneIndex]);
+            poseTransform.scale = GetScale(keys.scales, m_currentAnim.currentFrame, m_defaultScales[boneIndex]);
 
             if (m_isBlending)
             {
-                const float blendDelta = m_targetAnim.currentFrame / m_blendTime;
+                const BoneKeys& previousKeys = m_previousAnim.animation->keys[boneIndex];
 
-                glm::vec3 targetPosition = GetPosition(m_targetAnim.animPlayer->keys[boneIndex].positions, m_targetAnim.currentFrame, m_defaultPositions[boneIndex]);
+                Transform& blendTransform = m_blendPose.bones[boneIndex];
+
+                const float blendDelta = m_currentAnim.currentFrame / m_blendTime;
+
+                if (!m_wasInterrupted)
+                {
+                    // When interrupted, we use the last computed pose staticly, so we can have responsiveness and visual fidelity
+                    blendTransform.position = GetPosition(previousKeys.positions, m_previousAnim.currentFrame, m_defaultPositions[boneIndex]);
+                    blendTransform.rotation = GetRotation(previousKeys.rotations, m_previousAnim.currentFrame, m_defaultRotations[boneIndex]);
+                    blendTransform.scale = GetScale(previousKeys.scales, m_previousAnim.currentFrame, m_defaultScales[boneIndex]);
+                }
+
                 if (boneIndex == 0 && extractRootMovement)
                 {
-                    glm::vec3 rootDeltaTarget = m_targetAnim.CalculateRootDelta(targetPosition);
-                    m_rootDelta = glm::mix(m_rootDelta, rootDeltaTarget, blendDelta);
+                    const glm::vec3 rootDeltaPrevious = m_wasInterrupted ? glm::vec3{} : m_previousAnim.CalculateRootDelta(blendTransform.position);
+                    m_rootDelta = glm::mix(rootDeltaPrevious, m_rootDelta, blendDelta);
                 }
                 else
                 {
-                    position = glm::mix(position, targetPosition, blendDelta);
+                    poseTransform.position = glm::mix(blendTransform.position, poseTransform.position, blendDelta);
                 }
 
-                glm::quat targetRotation = GetRotation(m_targetAnim.animPlayer->keys[boneIndex].rotations, m_targetAnim.currentFrame, m_defaultRotations[boneIndex]);
                 if (boneIndex == 0 && extractRootRotation)
                 {
-                    glm::quat rootRotDeltaTarget = m_targetAnim.CalculateRootRotDelta(targetRotation);
-                    m_rootRotDelta = glm::slerp(m_rootRotDelta, rootRotDeltaTarget, blendDelta);
+                    const glm::quat rootRotDeltaPrevious = m_wasInterrupted ? glm::quat{ 1.0f, 0.0f, 0.0f, 0.0f } : m_previousAnim.CalculateRootRotDelta(blendTransform.rotation);
+                    m_rootRotDelta = glm::slerp(rootRotDeltaPrevious, m_rootRotDelta, blendDelta);
                 }
                 else
                 {
-                    rotation = glm::slerp(rotation, targetRotation, m_targetAnim.currentFrame / m_blendTime);
+                    poseTransform.rotation = glm::slerp(blendTransform.rotation, poseTransform.rotation, blendDelta);
                 }
+
+                poseTransform.scale = glm::mix(blendTransform.scale, poseTransform.scale, blendDelta);
             }
 
-            const glm::mat4 scaleMatrix = glm::scale(glm::mat4{ 1.0f }, scale);
-            const glm::mat4 rotationMatrix = glm::toMat4(glm::normalize(rotation));
-            const glm::mat4 translateMatrix = glm::translate(glm::mat4{ 1.0f }, position);
+            const glm::mat4 scaleMatrix = glm::scale(glm::mat4{ 1.0f }, m_finalPose.bones[boneIndex].scale);
+            const glm::mat4 rotationMatrix = glm::toMat4(glm::normalize(m_finalPose.bones[boneIndex].rotation));
+            const glm::mat4 translateMatrix = glm::translate(glm::mat4{ 1.0f }, m_finalPose.bones[boneIndex].position);
             
-            const glm::mat4 offsetMatrix = m_skeleton->bones[boneIndex].offset;
             const glm::mat4 boneMatrix = translateMatrix * rotationMatrix * scaleMatrix;
-
             if (boneIndex == 0)
             {
                 m_finalMatrices[boneIndex] = boneMatrix;
@@ -139,13 +147,13 @@ namespace TombForge
             }
         }
 
-        // Don't do this above as the calculations depend on each other
+        // Don't do this above as the bone offset would affect the matrices incorrectly
         for (size_t b = 0; b < m_finalMatrices.size(); b++)
         {
             m_finalMatrices[b] = m_finalMatrices[b] * m_skeleton->bones[b].offset;
         }
 
-        TriggerEvents(m_currentAnim.animPlayer->events, m_currentAnim.currentFrame);
+        TriggerEvents(m_currentAnim.animation->events, m_currentAnim.currentFrame);
     }
 
     void AnimPlayer::SetSkeleton(std::shared_ptr<const Skeleton> skeleton)
@@ -157,6 +165,8 @@ namespace TombForge
         m_defaultPositions.resize(boneCount);
         m_defaultRotations.resize(boneCount);
         m_defaultScales.resize(boneCount);
+        m_finalPose.bones.resize(boneCount);
+        m_blendPose.bones.resize(boneCount);
 
         for (size_t boneIndex = 0; boneIndex < boneCount; boneIndex++)
         {
@@ -296,12 +306,13 @@ namespace TombForge
 
     glm::vec3 AnimPlayer::AnimPlaybackInfo::CalculateRootDelta(glm::vec3 newPosition)
     {
-        const auto& keys = animPlayer->keys[0].positions;
+        const auto& keys = animation->keys[0].positions;
 
         glm::vec3 result = newPosition - previousRootPosition;
         if (previousFrame > currentFrame && keys.size() > 0)
         {
             // Stop root looping back, add on last position
+            LOG_WARNING("Root looping, adding on last position %f, %f, %f", keys[keys.size() - 1].value.x, keys[keys.size() - 1].value.y, keys[keys.size() - 1].value.z);
             result += keys[keys.size() - 1].value;
         }
         previousRootPosition = newPosition;
@@ -311,7 +322,7 @@ namespace TombForge
 
     glm::quat AnimPlayer::AnimPlaybackInfo::CalculateRootRotDelta(const glm::quat& newRot)
     {
-        const auto& keys = animPlayer->keys[0].rotations;
+        const auto& keys = animation->keys[0].rotations;
 
         const glm::vec3 original = previousRootRotation * glm::vec3{ 0.0f, 0.0f, -1.0f };
         const glm::vec3 newF = newRot * glm::vec3{ 0.0f, 0.0f, -1.0f };
@@ -331,10 +342,10 @@ namespace TombForge
     {
         previousFrame = currentFrame;
 
-        currentFrame += deltaTime * animPlayer->framerate;
+        currentFrame += deltaTime * animation->framerate;
         if (shouldLoop)
         {
-            currentFrame = fmodf(currentFrame, animPlayer->length);
+            currentFrame = fmodf(currentFrame, animation->length);
         }
 
         if (previousFrame > currentFrame)
@@ -345,9 +356,10 @@ namespace TombForge
 
     void AnimPlayer::AnimPlaybackInfo::Clear()
     {
-        animPlayer = nullptr;
+        animation = nullptr;
         currentFrame = 0.0f;
         previousRootPosition = {};
+        previousRootRotation = { 1.0f, 0.0f, 0.0f, 0.0f };
         previousFrame = 0.0f;
         loopCount = 0;
         shouldLoop = false;

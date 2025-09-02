@@ -1,14 +1,9 @@
 #pragma once
 #include <memory>
 
-#include "Core/ProjectSettings.h"
-#include "Engine/Assets/AnimationLoader.h"
-#include "Engine/Assets/MaterialLoader.h"
+#include "Engine/ProjectSettings.h"
 #include "Engine/Assets/ModelImporter.h"
-#include "Engine/Assets/ModelLoader.h"
-#include "Engine/Assets/TextureLoader.h"
 #include "Engine/Levels/Level.h"
-#include "Engine/Levels/LevelManager.h"
 #include "Engine/Physics/Physics.h"
 #include "Engine/Physics/PhysicsInterface.h"
 #include "Engine/Physics/PlayerFilters.h"
@@ -17,6 +12,7 @@
 #include "Engine/Rendering/Renderer.h"
 #include "Engine/Player/LaraController.h"
 #include "Engine/Player/States/LaraState.h"
+#include "Engine/Assets/AssetRegistry.h"
 
 struct GLFWwindow;
 
@@ -38,6 +34,8 @@ namespace TombForge
         void HandleMouseMove(float x, float y);
 
         void HandleMouseScroll(float scrollY);
+
+        void HandleMouseButton(int button);
 
         void HandleFramebufferResize(int width, int height);
 
@@ -121,7 +119,7 @@ namespace TombForge
             Off
         };
 
-        // Look at potentially refactoring this editor stuff out
+        // todo: potentially refactor this editor stuff out
         struct EditorInfo
         {
             ProjectSettings projectSettings{};
@@ -138,7 +136,6 @@ namespace TombForge
 
             size_t selectedObject{};
             size_t selectedPointLight{};
-            size_t selectedMesh{};
 
             Axis selectedAxis{};
             SelectMode selectMode{};
@@ -150,6 +147,7 @@ namespace TombForge
             bool showTextureImport : 1{};
             bool showImportWindow : 1{};
             bool showLaraWindow : 1{};
+            bool showRegistryWindow : 1{};
             bool isDragging : 1{};
         };
 #endif
@@ -172,7 +170,9 @@ namespace TombForge
 
         void SetupLara();
 
-        void LoadLevel(const std::string& path);
+        void LoadLevel(const AssetId path);
+
+        void UnloadLevel();
 
         void DeleteLevelObject(size_t index);
 
@@ -195,10 +195,15 @@ namespace TombForge
         void SaveProject();
 
         /// <summary>
-        /// Takes a path to a Lara file and loads it if it exists
+        /// Removes the currently loaded project from the editor.
         /// </summary>
-        /// <param name="laraPath">The Lara model</param>
-        void LoadLaraIfExists(const std::string& laraPath);
+        void UnloadProject();
+
+        /// <summary>
+        /// Used when a new project is created/loaded to allow relative paths to work.
+        /// </summary>
+        /// <param name="directory">The new project directory</param>
+        void UpdateAssetLoaderDirectory(const std::string& directory);
 
         /// <summary>
         /// Registers all colliders in the level with the physics system
@@ -236,6 +241,12 @@ namespace TombForge
         void DrawImportWindow();
 
         void DrawLaraWindow();
+
+        void DrawModelWindow();
+
+        void DrawSkeletonWindow();
+
+        void DrawRegistryWindow();
 #endif
 
         Lara m_lara{};
@@ -244,16 +255,13 @@ namespace TombForge
 
         std::vector<std::unique_ptr<LaraBaseState>> states{}; // Indexed by state id
 
+        AssetRegistry m_assets{};
+
         std::shared_ptr<Level> m_level{};
 
-        std::shared_ptr<ModelLoader> m_modelLoader{};
-        std::shared_ptr<MaterialLoader> m_materialLoader{};
-        std::shared_ptr<TextureLoader> m_textureLoader{};
-        std::shared_ptr<AnimationLoader> m_animationLoader{};
-
-        std::unique_ptr<LevelManager> m_levelLoader{};
         std::unique_ptr<Renderer> m_renderer{};
 
+        // todo: potentially add to physics module
         JPH::PhysicsSystem* m_physicsSystem{};
         JPH::TempAllocatorImpl* m_physicsTmpAllocator{}; // For temp allocations during update
         JPH::JobSystem* m_physicsJobSystem{};

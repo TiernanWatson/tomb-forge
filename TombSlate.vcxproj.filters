@@ -27,10 +27,10 @@
     <ClCompile Include="Core\Maths\Transform.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Core\Graphics\Model.cpp">
+    <ClCompile Include="Engine\Rendering\Model.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Core\Graphics\Graphics.cpp">
+    <ClCompile Include="Engine\Rendering\Graphics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Core\Debug.cpp">
@@ -40,9 +40,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Core\IO\FileIO.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Levels\LevelManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Rendering\Renderer.cpp">
@@ -60,7 +57,7 @@
     <ClCompile Include="Core\Maths\Maths.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Core\Graphics\Texture.cpp">
+    <ClCompile Include="Engine\Rendering\Texture.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ThirdParty\imgui\backends\imgui_impl_glfw.cpp">
@@ -87,19 +84,7 @@
     <ClCompile Include="ThirdParty\imgui\imgui_widgets.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Core\Graphics\Material.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Assets\AssetLoader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Assets\TextureLoader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Assets\MaterialLoader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Assets\ModelLoader.cpp">
+    <ClCompile Include="Engine\Rendering\Material.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Animation\Skeleton.cpp">
@@ -124,9 +109,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Animation\AnimMachine.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Assets\AnimationLoader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Rendering\JoltDebugRenderer.cpp">
@@ -174,13 +156,13 @@
     <ClCompile Include="Engine\Player\LaraController.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Core\ProjectSettings.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Editor\Editor.cpp">
+    <ClCompile Include="Engine\ProjectSettings.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Core\Window.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Assets\AssetRegistry.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -194,22 +176,19 @@
     <ClInclude Include="Core\Maths\Transform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Graphics\Model.h">
+    <ClInclude Include="Engine\Rendering\Model.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Graphics\Graphics.h">
+    <ClInclude Include="Engine\Rendering\Graphics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Graphics\Material.h">
+    <ClInclude Include="Engine\Rendering\Material.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Core\Debug.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Core\IO\FileIO.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Levels\LevelManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Rendering\Renderer.h">
@@ -221,7 +200,7 @@
     <ClInclude Include="Engine\Assets\ModelImporter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Graphics\Texture.h">
+    <ClInclude Include="Engine\Rendering\Texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Core\Maths\Maths.h">
@@ -257,18 +236,6 @@
     <ClInclude Include="ThirdParty\imgui\imstb_truetype.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Assets\AssetLoader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Assets\TextureLoader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Assets\MaterialLoader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Assets\ModelLoader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Engine\Animation\Skeleton.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -291,9 +258,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Animation\AnimMachine.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Engine\Assets\AnimationLoader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Rendering\JoltDebugRenderer.h">
@@ -350,13 +314,19 @@
     <ClInclude Include="Core\Graphics\Cubemap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Core\ProjectSettings.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Editor\Editor.h">
+    <ClInclude Include="Engine\ProjectSettings.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Core\Window.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Assets\AssetRegistry.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Assets\AssetId.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\Graphics\Color.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

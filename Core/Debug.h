@@ -8,24 +8,24 @@
 
 namespace TombForge::Debug
 {
-	enum class DbgVerbosity : uint8_t
-	{
-		Info,
-		Warning,
-		Error
-	};
+    enum class DbgVerbosity : uint8_t
+    {
+        Info,
+        Warning,
+        Error
+    };
 
-	struct DbgMessage
-	{
-		std::string message{};
-		std::string file{};
-		int line{};
-		DbgVerbosity verbosity{};
-	};
+    struct DbgMessage
+    {
+        std::string message{};
+        std::string file{};
+        int line{};
+        DbgVerbosity verbosity{};
+    };
 
-	void Log(DbgVerbosity verbosity, const std::string& file, int line, const std::string& message, ...);
+    void Log(DbgVerbosity verbosity, const std::string& file, int line, const std::string& message, ...);
 
-	void MessageLoop(std::function<void(const DbgMessage&)> callback);
+    void MessageLoop(std::function<void(const DbgMessage&)> callback);
 }
 
 
@@ -35,7 +35,7 @@ namespace TombForge::Debug
 
 #define ASSERT(condition, message, ...) \
 if (!(condition)) { \
-	LOG_ERROR(message, __VA_ARGS__); \
+    LOG_ERROR(message, __VA_ARGS__); \
 }
 
 #else

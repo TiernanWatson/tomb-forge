@@ -7,52 +7,6 @@
 
 namespace TombForge
 {
-    // Level functions
-
-    bool Level::Save()
-    {
-        std::ofstream outFile(name);
-
-        if (!outFile.is_open())
-        {
-            return false;
-        }
-
-        nlohmann::json json;
-
-        for (size_t i = 0; i < staticObjects.size(); i++)
-        {
-            auto& obj = staticObjects[i];
-
-            glm::vec3 rotation = obj.transform.EulerRotation();
-
-            auto& jsonSec = json["statics"][i];
-            jsonSec["transform"]["position"]["x"] = obj.transform.position.x;
-            jsonSec["transform"]["position"]["y"] = obj.transform.position.y;
-            jsonSec["transform"]["position"]["z"] = obj.transform.position.z;
-            jsonSec["transform"]["rotation"]["x"] = rotation.x;
-            jsonSec["transform"]["rotation"]["y"] = rotation.y;
-            jsonSec["transform"]["rotation"]["z"] = rotation.z;
-            jsonSec["transform"]["scale"]["x"] = obj.transform.scale.x;
-            jsonSec["transform"]["scale"]["y"] = obj.transform.scale.y;
-            jsonSec["transform"]["scale"]["z"] = obj.transform.scale.z;
-            json["statics"][i]["name"] = obj.name;
-            json["statics"][i]["model"] = obj.model->name;
-            json["statics"][i]["parent"] = obj.parent;
-            json["statics"][i]["physics"] = obj.rigidbody.IsInvalid() ? 0 : 1;
-            json["statics"][i]["halfExtents"]["x"] = obj.halfExtents.x;
-            json["statics"][i]["halfExtents"]["y"] = obj.halfExtents.y;
-            json["statics"][i]["halfExtents"]["z"] = obj.halfExtents.z;
-        }
-
-        outFile << json.dump(4);
-
-        outFile.flush();
-        outFile.close();
-
-        return true;
-    }
-
     void UpdateBounds(LevelObject& obj)
     {
         const glm::vec3 corners[8]
@@ -137,6 +91,10 @@ namespace TombForge
 
     void GetClosestLights(const Level& level, const glm::vec3& position, MeshLightArray& result)
     {
+        // todo: There are problems with this algorithm in AOD levels, as they are room based.
+        // Look at taking occlusion into account using ray cast. If this doesn't help, need to look
+        // at sorting them as they come in from the level file and use the room name to compare.
+
         std::vector<uint32_t> lightIndices{};
         lightIndices.resize(level.pointLights.size());
         for (size_t i = 0; i < level.pointLights.size(); i++)
@@ -152,7 +110,7 @@ namespace TombForge
                 return dist1 < dist2;
             });
 
-        const size_t copyCount = lightIndices.size() < 8 ? lightIndices.size() : 8;
+        const size_t copyCount = lightIndices.size() < MaxLightsPerMesh ? lightIndices.size() : MaxLightsPerMesh;
         memcpy(result.data(), lightIndices.data(), copyCount * sizeof(uint32_t));
     }
 

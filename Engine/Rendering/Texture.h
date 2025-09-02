@@ -2,10 +2,8 @@
 
 #include <cstdint>
 #include <vector>
-#include <string>
 
-#include <glm/vec4.hpp>
-
+#include "../Assets/AssetId.h"
 #include "Graphics.h"
 
 namespace TombForge
@@ -32,10 +30,8 @@ namespace TombForge
         Trilinear
     };
 
-    struct Texture
+    struct Texture : public AssetBase
     {
-        std::string name{};
-
         std::vector<ColorByte> data{};
 
         uint32_t width{};
@@ -55,7 +51,5 @@ namespace TombForge
             // Attempts to check that the texture is initialized correctly
             return data.size() == static_cast<size_t>(format) * width * height;
         }
-
-        bool SaveBinary() const;
     };
 }

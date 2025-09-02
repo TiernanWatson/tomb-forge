@@ -3,7 +3,7 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "Debug.h"
+#include "../Core/Debug.h"
 
 namespace TombForge
 {
@@ -15,8 +15,30 @@ namespace TombForge
         {
             nlohmann::json json;
             in >> json;
-            name = json["name"].get<std::string>();
-            laraPath = json["laraPath"].get<std::string>();
+
+            if (json.contains("name"))
+            {
+                name = json["name"].get<std::string>();
+            }
+
+            if (json.contains("laraPath"))
+            {
+                laraPath = json["laraPath"].get<AssetId>();
+            }
+            else
+            {
+                laraPath = InvalidAssetId;
+            }
+
+            if (json.contains("defaultLevelPath"))
+            {
+                defaultLevelPath = json["defaultLevelPath"].get<AssetId>();
+            }
+            else
+            {
+                defaultLevelPath = InvalidAssetId;
+            }
+
             in.close();
         }
         else
@@ -34,6 +56,7 @@ namespace TombForge
             nlohmann::json json;
             json["name"] = name;
             json["laraPath"] = laraPath;
+            json["defaultLevelPath"] = defaultLevelPath;
             out << json.dump(4);
             out.flush();
             out.close();

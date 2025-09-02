@@ -20,6 +20,9 @@ namespace TombForge
     // Checks whether two AABBs are intersecting
     bool AABBIntersect(const AABB& one, const AABB& two);
 
+    // Checks if a ray intersects with an AABB
+    bool RayIntersectsAABB(const AABB& aabb, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, float* outDistance = nullptr);
+
     // Expands an AABB by joining it with another
     void AABBJoin(AABB& result, const AABB& swallow);
 }

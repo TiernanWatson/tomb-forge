@@ -17,7 +17,8 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 
 #include "../../Core/Maths/Transform.h"
-#include "../../Core/Graphics/Model.h"
+#include "../Rendering/Model.h"
+#include "../Assets/AssetId.h"
 
 #include <functional>
 #include <array>
@@ -32,6 +33,10 @@ namespace TombForge
 
     using ColliderId = uint32_t;
 
+    using ModelId = uint32_t;
+
+    using MeshId = uint32_t;
+
     enum ObjectType : uint8_t
     {
         LEVEL_OBJECT_STATIC,
@@ -42,6 +47,7 @@ namespace TombForge
 
     enum ColliderType : uint8_t
     {
+        COLLIDER_NONE,
         COLLIDER_BOX,
         COLLIDER_MESH
     };
@@ -63,22 +69,22 @@ namespace TombForge
     {
         glm::vec3 position{};
 
-        glm::vec3 color{};
+        glm::vec3 color{}; // Linear space
 
         float innerRadius{};
 
         float outerRadius{};
 
-        float intensity{ 1.0f };
+        float intensity{};
     };
 
     struct DirectionalLight
     {
-        glm::vec3 color{ 1.0f, 0.95f, 0.9f };
+        glm::vec3 color{}; // Linear space
 
-        glm::vec3 dir{ 0.25f, -0.5f, 0.25f };
+        glm::vec3 dir{};
 
-        float intensity{ 1.0f };
+        float intensity{};
     };
 
     struct SpotLight
@@ -87,7 +93,7 @@ namespace TombForge
 
         glm::vec3 position{};
 
-        float angle{ 45.0f };
+        float angle{};
     };
 
     struct BoxCollider
@@ -159,22 +165,19 @@ namespace TombForge
 
         glm::mat4 modelMatrix{}; // World-space, only updated if moved
 
-        Mesh* mesh{};
+        Mesh* mesh{};  // Pointer to mesh from the level models array
 
-        AABB bounds{};
+        AABB bounds{}; // World-space, only updated if moved
 
         MeshLightArray lights{};
 
         ColliderInfo collision{};
     };
 
-    struct Level
+    struct Level : public AssetBase
     {
-        std::string name{};
-
         // Objects
         std::vector<std::shared_ptr<Model>> models{};
-        std::vector<LevelObject> staticObjects{};
         std::vector<MeshInstance> meshes{};
 
         // Colliders
@@ -195,8 +198,6 @@ namespace TombForge
         // Ambient
         glm::vec3 ambientColor{ 1.0f, 1.0f, 1.0f };
         float ambientStrength{ 1.0f };
-
-        bool Save();
     };
 
     void UpdateBounds(LevelObject& obj);

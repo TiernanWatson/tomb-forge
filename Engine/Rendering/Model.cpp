@@ -6,62 +6,6 @@
 
 namespace TombForge
 {
-    // Save Functions
-
-    bool Model::SaveBinary() const
-    {
-        const std::string& filePath = name;
-
-        std::ofstream outFile(filePath, std::ios::binary);
-
-        if (outFile.is_open())
-        {
-            const size_t numMeshes = meshes.size();
-            outFile.write((const char*)&numMeshes, sizeof(size_t));
-
-            for (size_t i = 0; i < numMeshes; i++)
-            {
-                const Mesh& mesh = meshes[i];
-
-                const size_t nameSize = mesh.name.size();
-                outFile.write((const char*)&nameSize, sizeof(size_t));
-                outFile.write(mesh.name.c_str(), sizeof(char) * nameSize);
-
-                const size_t numVertices = mesh.vertices.size();
-                outFile.write((const char*)&numVertices, sizeof(size_t));
-                outFile.write((const char*)mesh.vertices.data(), numVertices * sizeof(decltype(mesh.vertices)::value_type));
-
-                const size_t numIndices = mesh.indices.size();
-                outFile.write((const char*)&numIndices, sizeof(size_t));
-                outFile.write((const char*)mesh.indices.data(), numIndices * sizeof(uint32_t));
-
-                const bool hasMaterial = mesh.material != nullptr;
-                outFile.write((const char*)&hasMaterial, sizeof(bool));
-
-                if (hasMaterial)
-                {
-                    const size_t stringSize = mesh.material->name.size();
-                    outFile.write((const char*)&stringSize, sizeof(size_t));
-                    outFile.write(mesh.material->name.c_str(), mesh.material->name.size());
-                }
-            }
-
-            const bool hasSkeleton = skeleton != nullptr;
-            outFile.write((const char*)&hasSkeleton, sizeof(bool));
-            
-            if (hasSkeleton)
-            {
-                const size_t stringSize = skeleton->name.size();
-                outFile.write((const char*)&stringSize, sizeof(size_t));
-                outFile.write(skeleton->name.c_str(), sizeof(char) * stringSize);
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
     void CalculateBoundingBox(Mesh& mesh)
     {;
         float largestXlocal{ -FLT_MAX };

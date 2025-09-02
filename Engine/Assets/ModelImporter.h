@@ -1,11 +1,11 @@
 #pragma once
 
-#include <string>
 #include <memory>
+#include <string>
 
-#include "../../Core/Graphics/Model.h"
-#include "../Animation/Skeleton.h"
 #include "../Animation/Animation.h"
+#include "../Animation/Skeleton.h"
+#include "../Rendering/Model.h"
 
 namespace TombForge
 {

@@ -4,6 +4,7 @@
 #include <glm/vec3.hpp>
 #include <string>
 #include <vector>
+#include "../Assets/AssetId.h"
 
 namespace TombForge
 {
@@ -49,11 +50,9 @@ namespace TombForge
         std::vector<ScaleKey> scales{};
     };
 
-    struct Animation
+    struct Animation : public AssetBase
     {
         static constexpr float DefaultFrameRate{ 30.0f };
-
-        std::string name{};
 
         std::vector<BoneKeys> keys{}; // The index corresponds to the bone ID
 
@@ -64,10 +63,6 @@ namespace TombForge
         float framerate{ DefaultFrameRate };
 
         bool hasRootMotion{}; // Extract root movement and don't apply to skeleton
-
-        bool Load();
-
-        bool SaveBinary() const;
     };
 
     std::string AnimEventToString(AnimEvent event);

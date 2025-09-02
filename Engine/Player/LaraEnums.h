@@ -43,6 +43,7 @@ namespace TombForge
         LARA_ANIM_RUN_TURN_L,
         LARA_ANIM_RUN_TURN_R,
         LARA_ANIM_FALL_TO_RUN,
+        LARA_ANIM_FALL_TO_IDLE,
 
         // Air and jumping
         LARA_ANIM_RUN_JUMP_L,

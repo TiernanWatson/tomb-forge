@@ -3,11 +3,12 @@
 #include <array>
 #include <memory>
 
-#include "../../Core/Graphics/Model.h"
+#include "../Rendering/Model.h"
 #include "../../Core/Maths/Transform.h"
 #include "../Animation/AnimMachine.h"
 #include "../Physics/Physics.h"
 #include "LaraEnums.h"
+#include "../Assets/AssetRegistry.h"
 
 namespace TombForge
 {
@@ -40,7 +41,7 @@ namespace TombForge
         LaraAnim animIndex{};
         LaraWeapon weapon{};
 
-        void LoadAnimations(AnimationLoader& loader);
+        void LoadAnimations(AssetRegistry& loader);
 
         void SetAnimation(LaraAnim anim, float fadeTime = 0.0f, bool loop = false);
 

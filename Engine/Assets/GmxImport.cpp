@@ -1,11 +1,12 @@
 #include "GmxImport.h"
 
 #include "../../Core/Debug.h"
-#include "../../Core/Graphics/Model.h"
-#include "../../Core/Graphics/Material.h"
-#include "../../Core/Graphics/Texture.h"
 #include "../../Core/IO/FileIO.h"
 #include "../../Core/Maths/Maths.h"
+#include "../../Core/Graphics/Color.h"
+#include "../Rendering/Material.h"
+#include "../Rendering/Model.h"
+#include "../Rendering/Texture.h"
 #include "TextureImport.h"
 
 #include <LevelExport.h>
@@ -80,7 +81,7 @@ namespace TombForge
                     LOG("Importing light type: %s", light.type.c_str());
                 }
                 auto& newLight = result.lights.emplace_back();
-                newLight.color = { light.R, light.G, light.B };
+                newLight.color = SRGBToLinear({ light.R, light.G, light.B });
                 newLight.intensity = 1.0f; // Not provided by exporter (it just uses radius)
                 newLight.position = adjustment.AsMatrix() * glm::vec4{ light.tX, light.tY, light.tZ, 1.0f };
                 newLight.innerRadius = light.Decay_Far_Start * settings.scale;

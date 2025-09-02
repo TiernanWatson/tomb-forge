@@ -5,6 +5,7 @@
 #include "Skeleton.h"
 #include "Animation.h"
 #include "../../Core/Debug.h"
+#include "../../Core/Maths/Transform.h"
 
 namespace TombForge
 {
@@ -13,6 +14,11 @@ namespace TombForge
         Off,
         PositionOnly,
         On
+    };
+
+    struct Pose
+    {
+        std::vector<Transform> bones{};
     };
 
     /// <summary>
@@ -60,30 +66,29 @@ namespace TombForge
 
         inline bool IsAnimation(const std::string& name) const
         {
-            auto& playback = m_isBlending ? m_targetAnim : m_currentAnim;
-            return playback.animPlayer && playback.animPlayer->name == name;
+            return m_currentAnim.animation && m_currentAnim.animation->name == name;
         }
 
         inline float CurrentTime() const
         {
-            return m_isBlending ? m_targetAnim.currentFrame : m_currentAnim.currentFrame;
+            return m_currentAnim.currentFrame;
         }
 
         inline float TimeLeft() const
         {
             float currentTime = CurrentTime();
-            float totalTime = m_isBlending ? m_targetAnim.animPlayer->length : m_currentAnim.animPlayer->length;
+            float totalTime = m_currentAnim.animation->length;
             return totalTime - currentTime;
         }
 
         inline bool IsLooping() const
         {
-            return m_isBlending ? m_targetAnim.shouldLoop : m_currentAnim.shouldLoop;
+            return m_currentAnim.shouldLoop;
         }
 
         inline void ShouldLoop(bool value)
         {
-            m_currentAnim.shouldLoop = m_targetAnim.shouldLoop = value;
+            m_currentAnim.shouldLoop = value;
         }
 
         inline bool IsBlending() const
@@ -95,20 +100,20 @@ namespace TombForge
 
         inline bool AnimHasRootMotion() const
         {
-            return m_currentAnim.animPlayer->hasRootMotion;
+            return m_currentAnim.animation->hasRootMotion;
         }
 
         inline bool IsValid() const
         {
             return m_skeleton != nullptr 
-                && m_currentAnim.animPlayer != nullptr 
-                && m_currentAnim.animPlayer->keys.size() == m_skeleton->bones.size();
+                && m_currentAnim.animation != nullptr 
+                && m_currentAnim.animation->keys.size() == m_skeleton->bones.size();
         }
 
     private:
         struct AnimPlaybackInfo
         {
-            std::shared_ptr<const Animation> animPlayer{};
+            std::shared_ptr<const Animation> animation{};
 
             glm::vec3 previousRootPosition{};
 
@@ -143,12 +148,15 @@ namespace TombForge
 
         std::vector<glm::mat4> m_finalMatrices{};
 
+        Pose m_finalPose{}; // Used by Process to store the final computed pose
+        Pose m_blendPose{}; // Either the last animation or last computed pose if interrupted
+
         std::vector<glm::vec3> m_defaultPositions{};
         std::vector<glm::quat> m_defaultRotations{};
         std::vector<glm::vec3> m_defaultScales{};
 
         AnimPlaybackInfo m_currentAnim{};
-        AnimPlaybackInfo m_targetAnim{}; // For blending
+        AnimPlaybackInfo m_previousAnim{}; // For blending
 
         glm::vec3 m_rootDelta{}; // Used for storing root motion
         glm::quat m_rootRotDelta{};
@@ -162,6 +170,7 @@ namespace TombForge
         RootMotionMode m_rootMotionMode{ RootMotionMode::PositionOnly };
 
         bool m_isBlending{};
+        bool m_wasInterrupted{};
     };
 }
 

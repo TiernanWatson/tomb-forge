@@ -1,5 +1,6 @@
 #include "JoltDebugRenderer.h"
-#include "../../Core/Graphics/Graphics.h"
+
+#include "Graphics.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>

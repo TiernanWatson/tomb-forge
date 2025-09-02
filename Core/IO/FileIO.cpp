@@ -137,7 +137,7 @@ namespace TombForge
     std::string FileIO::GetRelativePath(const std::string& filePath, const std::string& basePath)
     {
         ASSERT(basePath.size() < filePath.size(), "%s is not larger than %s", filePath.c_str(), basePath.c_str());
-        return filePath.substr(basePath.size() + 1);
+        return filePath.substr(basePath.size());
     }
 
     std::string FileIO::GetDirectory(const std::string& filePath)
@@ -173,8 +173,90 @@ namespace TombForge
         }
     }
 
+    void FileIO::DeleteFile(const std::string& filePath)
+    {
+        if (filePath.empty())
+        {
+            LOG_ERROR("Trying to delete file with empty string");
+            return;
+        }
+
+        if (std::filesystem::exists(filePath))
+        {
+            std::filesystem::remove(filePath);
+        }
+        else
+        {
+            LOG_WARNING("Trying to delete file %s that doesn't exist", filePath.c_str());
+        }
+    }
+
+    bool FileIO::IsContainedInDirectory(const std::string& filePath, const std::string& directory)
+    {
+        namespace fs = std::filesystem;
+
+        if (filePath.empty() || directory.empty())
+        {
+            return false;
+        }
+
+        try
+        {
+            fs::path fileAbs = fs::weakly_canonical(fs::absolute(filePath));
+            fs::path dirAbs = fs::weakly_canonical(fs::absolute(directory));
+
+            // Early out if directory is not a directory
+            if (!fs::is_directory(dirAbs))
+            {
+                return false;
+            }
+
+            // Check if fileAbs is within dirAbs
+            auto fileIt = fileAbs.begin();
+            auto dirIt = dirAbs.begin();
+
+            for (; dirIt != dirAbs.end(); ++dirIt, ++fileIt)
+            {
+                if (fileIt == fileAbs.end() || *fileIt != *dirIt)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+        catch (const fs::filesystem_error& e)
+        {
+            LOG_ERROR("Filesystem error: %s", e.what());
+            return false;
+        }
+    }
+
     bool FileIO::IsDirectory(const std::string& path)
     {
         return std::filesystem::is_directory(path);
+    }
+
+    bool FileIO::IsExtension(const std::string& file, const std::string& extension)
+    {
+        if (file.empty())
+        {
+            return false;
+        }
+
+        const size_t extIndex = file.find(extension);
+        if (extIndex == std::string::npos)
+        {
+            // Technically ends with this extension if the file has no extension
+            return extension.empty();
+        }
+
+        // File does have an extension, so if test extension is empty, then not a match
+        if (extension.empty())
+        {
+            return false;
+        }
+
+        const size_t startPos = file.size() - extension.size();
+        return startPos == extIndex; // String ends with extension is its the last bit of string
     }
 }

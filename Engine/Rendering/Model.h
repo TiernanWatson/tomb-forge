@@ -10,7 +10,7 @@
 #include <vector>
 
 #include "../../Engine/Animation/Skeleton.h"
-#include "AABB.h"
+#include "../../Core/Graphics/AABB.h"
 #include "Graphics.h"
 
 namespace TombForge
@@ -34,7 +34,7 @@ namespace TombForge
 
     struct Mesh
     {
-        std::string name{};
+        std::string name{}; // Can be anything (is not an asset path)
 
         std::vector<Vertex> vertices{};
 
@@ -51,17 +51,13 @@ namespace TombForge
         bool isDoubleSided{};
     };
 
-    struct Model
+    struct Model : public AssetBase
     {
-        std::string name{};
-
         std::vector<Mesh> meshes{};
 
         std::shared_ptr<Skeleton> skeleton{}; // nullptr means its static
 
         AABB bounds{};
-
-        bool SaveBinary() const;
     };
 
     void CalculateBoundingBox(Mesh& mesh);

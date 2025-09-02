@@ -5,13 +5,14 @@
 #include <glad/glad.h>
 #include <glfw3.h>
 
-#include "../Debug.h"
-#include "Model.h"
+#include "../../Core/Debug.h"
 #include "../../Core/IO/FileIO.h"
+#include "../Core/Graphics/Shader.h"
+#include "../Core/Graphics/Color.h"
+#include "Model.h"
 #include "Texture.h"
-#include "Shader.h"
 
-#include <intrin.h>
+//#include <intrin.h>
 
 namespace TombForge
 {
@@ -23,6 +24,8 @@ namespace TombForge
     static constexpr char const* GizmoFragmentShaderPath = "Shaders\\GizmoFragmentShader.glsl";
     static constexpr char const* DepthFragmentShaderPath = "Shaders\\DepthFragmentShader.glsl";
     static constexpr char const* DepthVertexShaderPath = "Shaders\\DepthVertexShader.glsl";
+
+    static constexpr float ClearBufferColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
 
     static bool s_graphicsInitialized{ false };
 
@@ -118,6 +121,7 @@ namespace TombForge
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
         glEnable(GL_MULTISAMPLE);
+        glEnable(GL_FRAMEBUFFER_SRGB);
 
         // Setup white texture
         m_whiteTexture = std::make_unique<Texture>();
@@ -365,11 +369,13 @@ namespace TombForge
             break;
         case TextureFormat::RGB:
             format = GL_RGB;
-            internalFormat = isFloats ? GL_RGB32F : GL_RGB8;
+            //internalFormat = isFloats ? GL_RGB32F : GL_RGB8;
+            internalFormat = isFloats ? GL_RGB32F : GL_SRGB8;
             break;
         case TextureFormat::RGBA:
             format = GL_RGBA;
-            internalFormat = isFloats ? GL_RGBA32F : GL_RGBA8;
+            //internalFormat = isFloats ? GL_RGBA32F : GL_RGBA8;
+            internalFormat = isFloats ? GL_RGBA32F : GL_SRGB8_ALPHA8;
             break;
         default:
             return TextureHandle{};
@@ -586,7 +592,7 @@ namespace TombForge
 
     void Graphics::ClearFrameBuffer()
     {
-        glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+        glClearColor(ClearBufferColor[0], ClearBufferColor[1], ClearBufferColor[2], ClearBufferColor[3]);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 

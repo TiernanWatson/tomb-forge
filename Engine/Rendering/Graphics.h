@@ -5,17 +5,16 @@
 #include <vector>
 
 #include <glad/glad.h>
-
-#include "../../Core/Maths/Transform.h"
 #include <glm/detail/type_mat.hpp>
 
-#include "Line.h"
+#include "../../Core/Graphics/Line.h"
 
 namespace TombForge
 {
+    struct Shader;
+    struct Model;
     struct Mesh;
     struct Texture;
-    struct Shader;
 
     struct GenericHandle
     {

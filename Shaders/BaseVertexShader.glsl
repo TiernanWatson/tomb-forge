@@ -18,8 +18,10 @@ void main()
 {
 	vec4 basePosition = vec4(aPosition, 1.0f);
 
+	mat3 normalMatrix = transpose(inverse(mat3(model)));
+
 	TexCoords = aUv;
-	Normal = aNormal;
+	Normal = normalize(normalMatrix * aNormal);
 	FragPos = vec3(model * basePosition);
 	
 	gl_Position = projection * view * model * basePosition;

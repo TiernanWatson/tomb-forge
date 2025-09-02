@@ -1,6 +1,7 @@
 #include "AABB.h"
 
 #include <cmath>
+#include <limits>
 #include "../Maths/Maths.h"
 
 namespace TombForge
@@ -36,6 +37,50 @@ namespace TombForge
         return CheckOverlap(one.min.x, one.max.x, two.min.x, two.max.x)
             && CheckOverlap(one.min.y, one.max.y, two.min.y, two.max.y)
             && CheckOverlap(one.min.z, one.max.z, two.min.z, two.max.z);
+    }
+
+    bool RayIntersectsAABB(const AABB& aabb, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, float* outDistance)
+    {
+        float tMin = 0.0f;
+        float tMax = std::numeric_limits<float>::max();
+
+        for (int i = 0; i < 3; ++i)
+        {
+            if (std::abs(rayDirection[i]) < 1e-8f)
+            {
+                // Ray is parallel to slab. No hit if origin not within slab
+                if (rayOrigin[i] < aabb.min[i] || rayOrigin[i] > aabb.max[i])
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                float invD = 1.0f / rayDirection[i];
+                float t1 = (aabb.min[i] - rayOrigin[i]) * invD;
+                float t2 = (aabb.max[i] - rayOrigin[i]) * invD;
+
+                if (t1 > t2)
+                {
+                    std::swap(t1, t2);
+                }
+
+                tMin = t1 > tMin ? t1 : tMin;
+                tMax = t2 < tMax ? t2 : tMax;
+
+                if (tMax < tMin)
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (outDistance)
+        {
+            *outDistance = tMin;
+        }
+
+        return true;
     }
 
     void AABBJoin(AABB& result, const AABB& swallow)

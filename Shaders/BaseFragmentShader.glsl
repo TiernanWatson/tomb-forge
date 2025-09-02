@@ -78,14 +78,12 @@ vec4 ProcessPointLight(int index)
 
 	float absDistance = distance(FragPos, instance.position);
 
-	float lightStrength;
-	if (absDistance < instance.innerRadius)
+	float lightStrength = instance.strength;
+	if (absDistance > instance.innerRadius)
 	{
-		lightStrength = 1.0;
-	}
-	else
-	{
-		lightStrength = max(mix(1.0, 0.0, (absDistance - instance.innerRadius) / (instance.outerRadius - instance.innerRadius)), 0.0) * instance.strength;
+		float falloff = absDistance - instance.innerRadius + 1.0;
+		float attenuation = 1.0 / (falloff * falloff);
+		lightStrength = attenuation * instance.strength;
 	}
 
 	// Diffuse component

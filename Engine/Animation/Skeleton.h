@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#include "../Assets/AssetId.h"
+
 namespace TombForge
 {
     struct Bone
@@ -19,17 +21,11 @@ namespace TombForge
         uint8_t parent{}; // Parent index in bones array
     };
 
-    struct Skeleton
+    struct Skeleton : public AssetBase
     {
-        std::string name{};
-
         std::vector<Bone> bones{};
 
         uint8_t FindBoneId(const std::string& boneName) const;
-
-        bool Load();
-
-        bool SaveBinary() const;
     };
 }
 

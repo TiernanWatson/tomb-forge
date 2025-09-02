@@ -5,11 +5,11 @@
 
 #include "../../Core/Graphics/AABB.h"
 #include "../../Core/Graphics/Frustum.h"
-#include "../../Core/Graphics/Graphics.h"
 #include "../../Core/Graphics/Shader.h"
-#include "../../Core/Graphics/Texture.h"
 #include "../../Core/Maths/Transform.h"
 #include "../Levels/Level.h"
+#include "Graphics.h"
+#include "Texture.h"
 
 #include <glm/detail/type_vec.hpp>
 #include <unordered_set>

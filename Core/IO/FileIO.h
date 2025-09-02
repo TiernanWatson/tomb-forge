@@ -17,6 +17,11 @@ namespace TombForge::FileIO
 
     std::string ReadEntireFile(const std::string& filePath);
 
+    /// <summary>
+    /// Checks if an absolute file path exists. Does not work with relative paths.
+    /// </summary>
+    /// <param name="filePath">File path to check</param>
+    /// <returns>True if exists, false otherwise</returns>
     bool FileExists(const std::string& filePath);
 
     bool IsAbsolutePath(const std::string& filePath);
@@ -47,6 +52,12 @@ namespace TombForge::FileIO
 
     void CreateDirectory(const std::string& directory);
 
+    void DeleteFile(const std::string& filePath);
+
+    bool IsContainedInDirectory(const std::string& filePath, const std::string& directory);
+
     bool IsDirectory(const std::string& path);
+
+    bool IsExtension(const std::string& file, const std::string& extension);
 }
 

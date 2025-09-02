@@ -2,18 +2,18 @@
 
 #include <stdexcept>
 
+#include <fstream>
 #include <glad/glad.h>
 #include <glfw3.h>
 #include <string>
-#include <fstream>
 
 #include "Core/Config.h"
 #include "Core/Debug.h"
-#include "Core/Graphics/Material.h"
-#include "Core/Graphics/Texture.h"
-#include "Core/Maths/Maths.h"
 #include "Core/IO/DevIO.h"
 #include "Core/IO/FileIO.h"
+#include "Core/Maths/Maths.h"
+#include "Core/Graphics/Color.h"
+#include "Engine/Assets/GmxImport.h"
 #include "Engine/Assets/ModelImporter.h"
 #include "Engine/Assets/TextureImport.h"
 #include "Engine/Levels/Level.h"
@@ -22,14 +22,16 @@
 #include "Engine/Player/States/AirState.h"
 #include "Engine/Player/States/ClimbState.h"
 #include "Engine/Player/States/LocomotionState.h"
-#include "Engine/Assets/GmxImport.h"
+#include "Engine/Rendering/Material.h"
+#include "Engine/Rendering/Texture.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
+#include <glm/gtx/matrix_decompose.hpp>
 
-#include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/CastResult.h>
+#include <Jolt/Physics/Collision/RayCast.h>
 
 #if DEVSLATE
 
@@ -46,15 +48,6 @@
 
 #endif
 
-#ifdef _WIN32
-#include <Wincon.h>
-extern "C" {
-    __declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;// Optimus: force switch to discrete GPU
-    __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;//AMD
-}
-
-#endif
-
 namespace TombForge
 {
     static constexpr float MouseSpeedIncrease = 0.25f;
@@ -67,6 +60,7 @@ namespace TombForge
     static constexpr char const* TextureFileExt{ ".tftex" };
     static constexpr char const* MaterialFileExt{ ".tfmat" };
     static constexpr char const* LevelFileExt{ ".tflev" };
+    static constexpr char const* ProjectFileExt{ ".tfproj" };
 
     static constexpr unsigned int NumTombSlateFiles{ 1 };
     static constexpr unsigned int NumImportFiles{ 1 };
@@ -75,7 +69,7 @@ namespace TombForge
 
     static constexpr COMDLG_FILTERSPEC TombSlateFileTypes[] =
     {
-        { L"TombForge Asset", L"*.tombs;*.tfskel;*.tfanim;*.tfmod;*.tftex;*.tflev" }
+        { L"TombForge Asset", L"*.tombs;*.tfskel;*.tfanim;*.tfmod;*.tftex;*.tfmat;*.tflev;*.tfproj" }
     };
 
     static constexpr COMDLG_FILTERSPEC ModelFileTypes[] =
@@ -121,6 +115,14 @@ namespace TombForge
         if (Engine* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window)); engine)
         {
             engine->HandleMouseScroll(scrollY);
+        }
+    }
+
+    static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+    {
+        if (Engine* engine = reinterpret_cast<Engine*>(glfwGetWindowUserPointer(window)); engine)
+        {
+            engine->HandleMouseButton(button);
         }
     }
 
@@ -205,18 +207,8 @@ namespace TombForge
     // Engine functions
 
     Engine::Engine()
-        : m_modelLoader{ std::make_shared<ModelLoader>() }
-        , m_materialLoader{ std::make_shared<MaterialLoader>() }
-        , m_textureLoader{ std::make_shared<TextureLoader>() }
-        , m_animationLoader{ std::make_shared<AnimationLoader>() }
-        , m_levelLoader{ std::make_unique<LevelManager>() }
-        , m_laraController{ &m_lara, &m_physicsInterface }
+        : m_laraController{ &m_lara, &m_physicsInterface }
     {
-        m_modelLoader->SetMaterialLoader(m_materialLoader);
-        m_materialLoader->SetTextureLoader(m_textureLoader);
-        m_levelLoader->SetModelLoader(m_modelLoader);
-        m_levelLoader->SetAnimationLoader(m_animationLoader);
-
         const Config& config = Config::Get();
 
         m_windowWidth = config.resolutionX;
@@ -253,6 +245,7 @@ namespace TombForge
         glfwSetCursorPosCallback(m_window, MouseMoveCallback);
         glfwSetScrollCallback(m_window, ScrollCallback);
         glfwSetKeyCallback(m_window, KeyCallback);
+        glfwSetMouseButtonCallback(m_window, MouseButtonCallback);
 
         m_previousTime = glfwGetTime();
 
@@ -301,25 +294,15 @@ namespace TombForge
 
         m_renderer = std::make_unique<Renderer>();
 
-        // Load Level
+        // Levels
 
         SetupDefaultShapes();
-
-        m_levelLoader->SetPhysicsSystem(m_physicsSystem);
-        //m_level = m_levelLoader->Load(config.defaultLevel);
 
         if (!m_level)
         {
             m_level = std::make_shared<Level>();
             m_level->name = "Untitled Level";
         }
-
-        if (!m_renderer->InitializeLevel(*m_level))
-        {
-            throw std::runtime_error("Failed to initialize the level in the renderer");
-        }
-
-        SetupLara();
 
         InitializeCameraRotations();
 
@@ -377,16 +360,6 @@ namespace TombForge
                             JPH::Color::sWhite,
                             false, true);
                     }
-                    
-                    for (auto& obj : m_level->staticObjects)
-                    {
-                        JPH::BodyInterface& bodies = m_physicsSystem->GetBodyInterface();
-                        JPH::ShapeRefC shape = bodies.GetShape(obj.rigidbody);
-                        if (shape)
-                        {
-                            shape->Draw(m_physicsDebugRenderer, bodies.GetCenterOfMassTransform(obj.rigidbody), JPH::Vec3{ 1.0f, 1.0f, 1.0f }, JPH::Color{ 0,255,0,255 }, false, true);
-                        }
-                    }
 
                     for (auto& obj : m_level->boxColliders)
                     {
@@ -423,7 +396,7 @@ namespace TombForge
 
                 if (m_drawMeshNormals)
                 {
-                    if (m_level->staticObjects.size() > 0 && m_editInfo.selectedObject < m_level->staticObjects.size())
+                    /*if (m_level->staticObjects.size() > 0 && m_editInfo.selectedObject < m_level->staticObjects.size())
                     {
                         auto& obj = m_level->staticObjects[m_editInfo.selectedObject];
                         for (auto& mesh : obj.model->meshes)
@@ -435,7 +408,7 @@ namespace TombForge
                                 m_physicsDebugRenderer->DrawColoredLine(transformedPos, end, { 0.0f, 0.0f, 1.0f, 1.0f });
                             }
                         }
-                    }
+                    }*/
                 }
 
                 if (m_drawOctree)
@@ -471,8 +444,10 @@ namespace TombForge
             }
 
             // This is done outside of if statement to stop lag happening from input
+            glDisable(GL_FRAMEBUFFER_SRGB); // ImGui does not use linear space
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            glEnable(GL_FRAMEBUFFER_SRGB);
 #endif
 
             glfwSwapBuffers(m_window);
@@ -495,6 +470,56 @@ namespace TombForge
     void Engine::HandleMouseScroll(float scrollY)
     {
         m_cameraSpeed += scrollY * MouseSpeedIncrease;
+    }
+
+    void Engine::HandleMouseButton(int button)
+    {
+        if (!m_level)
+        {
+            return;
+        }
+
+        if (button == GLFW_MOUSE_BUTTON_1 && !ImGui::GetIO().WantCaptureMouse)
+        {
+            // Convert to NDC
+            float x = (2.0f * m_mouseX) / m_windowWidth - 1.0f;
+            float y = 1.0f - (2.0f * m_mouseY) / m_windowHeight;
+            glm::vec4 rayNDC(x, y, -1.0f, 1.0f);
+
+            // Unproject to world space
+            const glm::mat4 view = m_camera.transform.AsMatrix();
+            const glm::mat4 projection = glm::perspective(m_camera.fovY, m_camera.aspect, m_camera.near, m_camera.far);
+
+            glm::mat4 invVP = glm::inverse(projection * view);
+            glm::vec4 rayWorld = invVP * rayNDC;
+            rayWorld /= rayWorld.w;
+
+            glm::vec3 rayDir = glm::normalize(glm::vec3(rayWorld) - m_camera.transform.position);
+
+            size_t selected = 0;
+            bool found = false;
+            float shortestDis = std::numeric_limits<float>::max();
+            for (size_t i = 0; i < m_level->meshes.size(); i++)
+            {
+                const auto& obj = m_level->meshes[i];
+
+                float distance{};
+                if (RayIntersectsAABB(obj.bounds, m_camera.transform.position, rayDir, &distance))
+                {
+                    if (distance < shortestDis)
+                    {
+                        shortestDis = distance;
+                        selected = i;
+                        found = true;
+                    }
+                }
+            }
+
+            if (found)
+            {
+                m_editInfo.selectedObject = selected;
+            }
+        }
     }
 
     void Engine::HandleFramebufferResize(int width, int height)
@@ -555,7 +580,7 @@ namespace TombForge
         m_lastMouseX = m_mouseX;
         m_lastMouseY = m_mouseY;
 
-        if (isPlayer || m_wantsFrameAdvance)
+        if (m_lara.model && (isPlayer || m_wantsFrameAdvance))
         {
             m_lara.cameraPitch = m_cameraPitch;
             m_lara.cameraYaw = m_cameraYaw;
@@ -608,7 +633,6 @@ namespace TombForge
         states[m_stateIndex]->Exit(controller);
         states[newState]->Begin(controller);
 
-        //lara.lastStateIndex = lara.stateIndex;
         m_stateIndex = newState;
     }
 
@@ -679,64 +703,53 @@ namespace TombForge
         // Material
 
         std::shared_ptr<Texture> debugTexture = std::make_shared<Texture>();
-        debugTexture->name = "Debug";
-
         GenerateDebugTexture(*debugTexture, glm::ivec4{ 20, 50, 200, 255 }, glm::ivec4{ 20, 20, 20, 255 });
-
-        m_textureLoader->AddExisting("Debug", debugTexture);
+        m_assets.AddAsset(debugTexture, "Debug Texture", "");
 
         std::shared_ptr<Material> debugMaterial = std::make_shared<Material>();
         debugMaterial->diffuse = debugTexture;
         debugMaterial->AddFlag(MATERIAL_FLAG_DIFFUSE);
-
-        m_materialLoader->AddExisting("Debug", debugMaterial);
+        m_assets.AddAsset(debugMaterial, "Debug Material", "");
 
         // Cube
 
         std::shared_ptr<Model> cube = std::make_shared<Model>();
-        cube->name = "Cube";
         MakeUnitCube(*cube);
-
         cube->meshes[0].material = debugMaterial;
-
-        m_modelLoader->AddExisting("Cube", cube);
+        m_assets.AddAsset(cube, "Cube", "");
 
         // Cone
 
         std::shared_ptr<Model> cone = std::make_shared<Model>();
-        cone->name = "Cone";
         MakeUnitCone(*cone, 4);
-
         cone->meshes[0].material = debugMaterial;
-
-        m_modelLoader->AddExisting("Cone", cone);
-
-        cone->meshes[0].gpuHandle = Graphics::Get().CreateMeshInstance(cone->meshes[0]);
+        m_assets.AddAsset(cone, "Cone", "");
 
         // Arrow
 
         std::shared_ptr<Model> arrow = std::make_shared<Model>();
-        arrow->name = "Arrow";
         MakeUnitArrow(*arrow);
-
         arrow->meshes[0].material = debugMaterial;
-
-        m_modelLoader->AddExisting("Arrow", arrow);
-
-        arrow->meshes[0].gpuHandle = Graphics::Get().CreateMeshInstance(arrow->meshes[0]);
+        m_assets.AddAsset(arrow, "Arrow", "");
     }
 
     void Engine::SetupLara()
     {
-        const std::string laraPath = m_editInfo.projectSettings.laraPath;
+        const AssetId laraPath = m_editInfo.projectSettings.laraPath;
 
-        if (!FileIO::FileExists(laraPath))
+        if (!IsValidAssetId(laraPath))
         {
-            LOG_ERROR("Lara path not found: %s", m_editInfo.projectSettings.laraPath.c_str());
+            LOG_ERROR("Lara ID not valid: %i", laraPath);
             return;
         }
 
-        m_lara.model = m_modelLoader->Load(laraPath);
+        m_lara.model = m_assets.Load<Model>(laraPath);
+        if (!m_lara.model)
+        {
+            LOG_ERROR("Failed to load Lara model with ID: %i", laraPath);
+            return;
+        }
+
         m_lara.animPlayer.SetSkeleton(m_lara.model->skeleton);
 
         m_renderer->InitializeModel(*m_lara.model);
@@ -779,26 +792,95 @@ namespace TombForge
             states.emplace(states.begin() + i, state);
         }
 
-        m_lara.LoadAnimations(*m_animationLoader);
+        m_lara.LoadAnimations(m_assets);
         m_lara.SetAnimation(LARA_ANIM_IDLE, 0.0f, true);
     }
 
-    void Engine::LoadLevel(const std::string& path)
+    void Engine::LoadLevel(const AssetId path)
     {
-        m_levelLoader->ClearUnreferenced();
-        m_level = m_levelLoader->Load(path);
+        UnloadLevel();
+
+        m_level = m_assets.Load<Level>(path);
+
+        if (m_level)
+        {
+            m_renderer->InitializeLevel(*m_level);
+            InitializeColliders();
+            
+            m_lara.transform.position = m_level->startPosition;
+        }
+        else
+        {
+            LOG_ERROR("Failed to load level: %i", path);
+        }
+    }
+
+    void Engine::UnloadLevel()
+    {
+        if (m_level)
+        {
+            // Clear physics bodies
+            for (auto& obj : m_level->boxColliders)
+            {
+                auto bodyId = obj.rigidbody;
+                if (!bodyId.IsInvalid())
+                {
+                    auto& bodies = m_physicsSystem->GetBodyInterface();
+                    bodies.RemoveBody(bodyId);
+                    bodies.DestroyBody(bodyId);
+                    obj.rigidbody = JPH::BodyID();
+                }
+            }
+            for (auto& obj : m_level->meshColliders)
+            {
+                auto bodyId = obj.rigidbody;
+                if (!bodyId.IsInvalid())
+                {
+                    auto& bodies = m_physicsSystem->GetBodyInterface();
+                    bodies.RemoveBody(bodyId);
+                    bodies.DestroyBody(bodyId);
+                    obj.rigidbody = JPH::BodyID();
+                }
+            }
+            m_level->boxColliders.clear();
+            m_level->meshColliders.clear();
+
+            m_renderer->DeloadLevel(*m_level);
+            m_level->meshes.clear();
+        }
+
+        m_level = nullptr;
     }
 
     void Engine::DeleteLevelObject(size_t index)
     {
-        if (!m_level->staticObjects[index].rigidbody.IsInvalid())
+        ColliderId colliderToRemove = m_level->meshes[index].collision.id;
+        ColliderType colliderType = m_level->meshes[index].collision.type;
+        if (colliderType == COLLIDER_MESH)
         {
-            auto& bodies = m_physicsSystem->GetBodyInterface();
-            bodies.RemoveBody(m_level->staticObjects[index].rigidbody);
-            bodies.DestroyBody(m_level->staticObjects[index].rigidbody);
+            auto bodyId = m_level->meshColliders[colliderToRemove].rigidbody;
+            if (!bodyId.IsInvalid())
+            {
+                auto& bodies = m_physicsSystem->GetBodyInterface();
+                bodies.RemoveBody(bodyId);
+                bodies.DestroyBody(bodyId);
+                m_level->meshColliders[colliderToRemove].rigidbody = JPH::BodyID();
+            }
+        }
+        else if (colliderType == COLLIDER_BOX)
+        {
+            auto bodyId = m_level->boxColliders[colliderToRemove].rigidbody;
+            if (!bodyId.IsInvalid())
+            {
+                auto& bodies = m_physicsSystem->GetBodyInterface();
+                bodies.RemoveBody(bodyId);
+                bodies.DestroyBody(bodyId);
+                m_level->boxColliders[colliderToRemove].rigidbody = JPH::BodyID();
+            }
         }
 
-        m_level->staticObjects.erase(m_level->staticObjects.begin() + index);
+        m_level->meshes[index] = {};
+
 #if DEVSLATE
         m_editInfo.selectedObject = 0;
 #endif
@@ -833,6 +915,8 @@ namespace TombForge
 
     void Engine::CreateNewProject(const std::string& path)
     {
+        UnloadProject();
+
         if (!FileIO::IsDirectory(path))
         {
             LOG_ERROR("Could not create project. Path is not a directory: %s", path.c_str());
@@ -843,17 +927,18 @@ namespace TombForge
         m_editInfo.projectSettings.name = FileIO::GetFileName(path);
         m_editInfo.projectSettings.SaveJson(path + "/project.tfproj");
 
-        m_levelLoader->SetDirectory(path);
-        m_modelLoader->SetDirectory(path);
-        m_animationLoader->SetDirectory(path);
-        m_textureLoader->SetDirectory(path);
-        m_materialLoader->SetDirectory(path);
+        UpdateAssetLoaderDirectory(path);
+
+        m_level = std::make_shared<Level>();
+        m_level->name = "Untitled Level";
 
         LOG("Project created: %s at %s", m_editInfo.projectSettings.name.c_str(), path.c_str());
     }
 
     void Engine::LoadProject(const std::string& settingsPath)
     {
+        UnloadProject();
+
         if (!FileIO::FileExists(settingsPath))
         {
             LOG_ERROR("Project settings file not found: %s", settingsPath.c_str());
@@ -863,7 +948,26 @@ namespace TombForge
         m_editInfo.projectSettings = {};
         m_editInfo.projectSettings.LoadJson(settingsPath);
 
-        LoadLaraIfExists(m_editInfo.projectSettings.laraPath);
+        const std::string projectDirectory = FileIO::GetDirectory(settingsPath);
+        m_editInfo.projectPath = projectDirectory;
+
+        UpdateAssetLoaderDirectory(projectDirectory);
+
+        if (IsValidAssetId(m_editInfo.projectSettings.laraPath))
+        {
+            m_lara.model = m_assets.Load<Model>(m_editInfo.projectSettings.laraPath);
+            SetupLara();
+        }
+
+        if (IsValidAssetId(m_editInfo.projectSettings.defaultLevelPath))
+        {
+            LoadLevel(m_editInfo.projectSettings.defaultLevelPath);
+        }
+        else
+        {
+            m_level = std::make_shared<Level>();
+            m_level->name = "Untitled Level";
+        }
 
         LOG("Project loaded: %s", m_editInfo.projectSettings.name.c_str());
     }
@@ -878,19 +982,23 @@ namespace TombForge
 
         m_editInfo.projectSettings.SaveJson(m_editInfo.projectPath + "/project.tfproj");
 
-        m_level->Save();
+        m_assets.SaveAsset(m_level);
 
         // todo: save out config file
     }
 
-    void Engine::LoadLaraIfExists(const std::string& laraPath)
+    void Engine::UnloadProject()
     {
-        if (!FileIO::FileExists(laraPath))
-        {
-            return;
-        }
+        UnloadLevel();
 
-        m_lara.model = m_modelLoader->Load(laraPath);
+        m_editInfo.projectSettings = {};
+        m_editInfo.projectPath = {};
+        m_editInfo.assetImport.Finish();
+    }
+
+    void Engine::UpdateAssetLoaderDirectory(const std::string& directory)
+    {
+        m_assets.Init(directory);
     }
 
     void Engine::InitializeColliders()
@@ -969,25 +1077,6 @@ namespace TombForge
 
     void Engine::OnObjectTransformUpdate(size_t index)
     {
-        auto& obj = m_level->staticObjects[index];
-
-        if (obj.halfExtents.x == 0.0f || obj.halfExtents.y == 0.0f || obj.halfExtents.z == 0.0f
-            || obj.transform.scale.x == 0.0f || obj.transform.scale.y == 0.0f || obj.transform.scale.z == 0.0f)
-        {
-            // Invalid half extents, don't try to make rigidbody
-            return;
-        }
-
-        if (!obj.rigidbody.IsInvalid())
-        {
-            auto& bodies = m_physicsSystem->GetBodyInterface();
-
-            bodies.RemoveBody(obj.rigidbody);
-            bodies.DestroyBody(obj.rigidbody);
-
-            JPH::Ref<JPH::Shape> shape = CreateBoxShape(obj.transform, GlmVec3ToJph(obj.halfExtents), GlmVec3ToJph(obj.transform.scale));
-            obj.rigidbody = CreateBody(bodies, shape, JPH::EMotionType::Static);
-        }
     }
 
     void Engine::OnLaraTransformUpdate()
@@ -1003,14 +1092,43 @@ namespace TombForge
 
     void Engine::DrawGizmos()
     {
+        if (!m_level)
+        {
+            return;
+        }
+
         Level& level = *m_level;
 
-        if (m_editInfo.isDragging && m_editInfo.selectedObject < level.staticObjects.size())
+        if (m_editInfo.selectedObject < m_level->meshes.size())
+        {
+            // Draw lights attached to it
+            for (size_t l = 0; l < m_level->pointLights.size(); l++)
+            {
+                // todo: re-enable later with proper gizmo for lights
+                break;
+                
+                for (const auto& li : m_level->meshes[m_editInfo.selectedObject].lights)
+                {
+                    if (li == l)
+                    {
+                        const PointLight& light = m_level->pointLights[l];
+                        glm::vec3 position = light.position;
+
+                        Transform lightTransform{};
+                        lightTransform.position = position;
+                        
+                        DrawConeArrow(lightTransform.AsMatrix(), glm::vec4{1.0f, 0, 1.0f, 1.0f});
+                    }
+                }
+            }
+        }
+
+        if (m_editInfo.isDragging && m_editInfo.selectedObject < level.meshes.size())
         {
             // So gizmos are above objects
             Graphics::Get().ClearDepthBuffer();
 
-            Transform& objTransform = level.staticObjects[m_editInfo.selectedObject].transform;
+            Transform& objTransform = level.meshes[m_editInfo.selectedObject].transform;
             const glm::vec3 position = objTransform.position;
 
             constexpr float OverallScale = 0.15f;
@@ -1059,14 +1177,37 @@ namespace TombForge
 
         graphics.SetVec4("color", color);
 
-        graphics.DrawMesh(m_modelLoader->Load("Arrow")->meshes[0].gpuHandle);
+        graphics.DrawMesh(m_assets.Load<Model>("Arrow")->meshes[0].gpuHandle);
     }
 
     void Engine::DrawDevWindows()
     {
-        // Options
+        const bool projectLoaded = !m_editInfo.projectSettings.name.empty();
 
-        ImGui::ShowDemoWindow();
+        if (!projectLoaded)
+        {
+            const char* windowName = "No Project Loaded";
+            const ImGuiWindowFlags flags =
+                ImGuiWindowFlags_NoMove |
+                ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoCollapse |
+                ImGuiWindowFlags_NoTitleBar |
+                ImGuiWindowFlags_AlwaysAutoResize;
+
+            // Calculate center position
+            ImVec2 windowSize(m_windowWidth / 3.0f, 0); // width, height will auto-fit
+            ImVec2 center = ImVec2(m_windowWidth * 0.5f, m_windowHeight * 0.5f);
+
+            // Set next window size and position
+            ImGui::SetNextWindowSize(windowSize, ImGuiCond_Always);
+            ImGui::SetNextWindowPos(ImVec2(center.x - windowSize.x * 0.5f, center.y - 50), ImGuiCond_Always);
+
+            ImGui::Begin(windowName, nullptr, flags);
+            ImGui::TextWrapped("No project loaded.\nCreate or open a project from the File menu.");
+            ImGui::End();
+        }
+
+        // Options
 
         ImGui::BeginMainMenuBar();
 
@@ -1089,43 +1230,43 @@ namespace TombForge
                     LoadProject(filePath);
                 }
             }
-            if (ImGui::MenuItem("Save Project"))
+            if (projectLoaded)
             {
-                
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem("New Level"))
-            {
-                
-            }
-            if (ImGui::MenuItem("Load Level"))
-            {
-                const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
-
-                if (!filePath.empty())
+                if (ImGui::MenuItem("Save Project"))
                 {
-                    if (m_level)
-                    {
-                        m_renderer->DeloadLevel(*m_level);
-                    }
-
-                    LoadLevel(filePath);
-
-                    m_renderer->InitializeLevel(*m_level);
+                    SaveProject();
                 }
-            }
-            if (m_level && ImGui::MenuItem("Save Level"))
-            {
-                m_level->Save();
-            }
-            if (m_level && ImGui::MenuItem("Save Level As..."))
-            {
-                const std::string filePath = SaveFileDialog(TombSlateFileTypes, NumTombSlateFiles);
-
-                if (!filePath.empty())
+                ImGui::Separator();
+                if (ImGui::MenuItem("New Level"))
                 {
-                    m_level->name = filePath;
-                    m_level->Save();
+
+                }
+                if (ImGui::MenuItem("Load Level"))
+                {
+                    const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+
+                    if (!filePath.empty())
+                    {
+                        const AssetId id = m_assets.GetAssetId(filePath);
+                        if (IsValidAssetId(id))
+                        {
+                            if (m_level)
+                            {
+                                m_renderer->DeloadLevel(*m_level);
+                            }
+
+                            LoadLevel(id);
+                            m_renderer->InitializeLevel(*m_level);
+                        }
+                        else
+                        {
+                            LOG_ERROR("File is not a part of the registry");
+                        }
+                    }
+                }
+                if (m_level && ImGui::MenuItem("Save Level"))
+                {
+                    m_assets.SaveAsset(m_level);
                 }
             }
             ImGui::Separator();
@@ -1136,170 +1277,183 @@ namespace TombForge
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Assets"))
+        if (projectLoaded)
         {
-            if (ImGui::MenuItem("Import Assets"))
+            if (ImGui::BeginMenu("Assets"))
             {
-                m_editInfo.importPaths.clear();
-                if (OpenMultiFileDialog(ModelFileTypes, 1, m_editInfo.importPaths))
+                if (ImGui::MenuItem("Import Assets"))
                 {
-                    for (auto it = m_editInfo.importPaths.begin(); it != m_editInfo.importPaths.end(); it++)
+                    m_editInfo.importPaths.clear();
+                    if (OpenMultiFileDialog(ModelFileTypes, 1, m_editInfo.importPaths))
                     {
-                        if (it->empty())
+                        for (auto it = m_editInfo.importPaths.begin(); it != m_editInfo.importPaths.end(); it++)
                         {
-                            it = m_editInfo.importPaths.erase(it);
-                        }
-                    }
-
-                    if (m_editInfo.importPaths.size() > 0)
-                    {
-                        m_editInfo.showImportWindow = true;
-                    }
-                }
-            }
-            if (ImGui::MenuItem("Import GMX"))
-            {
-                const std::string filePath = OpenFileDialog(AodFileTypes, NumAodFiles);
-                if (!filePath.empty())
-                {
-                    GmxResult result = ImportGmx(filePath, {});
-
-                    m_level->directionalLight.intensity = 0.0f;
-
-                    m_level->ambientStrength = 0.1f;
-                    m_level->ambientColor = { 1.0f, 1.0f, 1.0f };
-
-                    if (result.lights.size() > 0)
-                    {
-                        m_level->pointLights = std::move(result.lights);
-                    }
-
-                    if (result.geometry.size() > 0)
-                    {
-                        m_level->models = result.geometry;
-
-                        for (auto& model : result.geometry)
-                        {
-                            for (auto& mesh : model->meshes)
+                            if (it->empty())
                             {
-                                auto& instance = m_level->meshes.emplace_back();
-                                instance.mesh = &mesh;
-                                instance.bounds = mesh.bounds;
-                                instance.modelMatrix = instance.transform.AsMatrix();
-
-                                const glm::vec3 lightReferencePosition = (mesh.bounds.min + mesh.bounds.max) / 2.0f;
-                                GetClosestLights(*m_level, lightReferencePosition, instance.lights);
+                                it = m_editInfo.importPaths.erase(it);
                             }
                         }
 
-                        m_renderer->InitializeLevel(*m_level);
-
-                        LOG("Imported Geometry %s", filePath.c_str());
-                    }
-
-                    if (result.boxColliders.size() > 0)
-                    {
-                        m_level->boxColliders = std::move(result.boxColliders);
-                    }
-
-                    if (result.meshColliders.size() > 0)
-                    {
-                        m_level->meshColliders = std::move(result.meshColliders);
-                    }
-
-                    InitializeColliders();
-                }
-            }
-            if (ImGui::MenuItem("Import Texture"))
-            {
-                const std::string filePath = OpenFileDialog(TextureFileTypes, NumTextureFiles);
-
-                if (!filePath.empty())
-                {
-                    Texture texture;
-                    if (ImportTexture(filePath, texture))
-                    {
-                        const std::string outPath = OpenFileDialog({}, 0, true);
-                        if (!outPath.empty())
+                        if (m_editInfo.importPaths.size() > 0)
                         {
-                            texture.name = outPath;
-                            texture.SaveBinary();
+                            m_editInfo.showImportWindow = true;
                         }
                     }
                 }
-            }
-            ImGui::Separator();
-            if (ImGui::MenuItem("Edit Material"))
-            {
-                const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
-                if (!filePath.empty())
+                if (ImGui::MenuItem("Import GMX"))
                 {
-                    m_editInfo.material = m_materialLoader->Load(filePath);
-                    m_editInfo.showMaterialEditor = true;
-                }
-            }
-            if (ImGui::MenuItem("Edit Animation"))
-            {
-                const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
-                if (!filePath.empty())
-                {
-                    m_editInfo.animation = std::make_shared<Animation>();
-                    m_editInfo.animation->name = filePath;
-                    if (m_editInfo.animation->Load())
+                    const std::string filePath = OpenFileDialog(AodFileTypes, NumAodFiles);
+                    if (!filePath.empty())
                     {
-                        m_editInfo.showAnimEditor = true;
-                    }
-                    else
-                    {
-                        m_editInfo.animation = nullptr;
+                        GmxResult result = ImportGmx(filePath, {});
+
+                        m_level->directionalLight.intensity = 0.0f;
+
+                        m_level->ambientStrength = 1.0f;
+                        m_level->ambientColor = SRGBToLinear(glm::vec3{ 0.1f, 0.1f, 0.1f });
+
+                        if (result.lights.size() > 0)
+                        {
+                            m_level->pointLights = std::move(result.lights);
+                        }
+
+                        if (result.geometry.size() > 0)
+                        {
+                            m_level->models = result.geometry;
+
+                            for (auto& model : result.geometry)
+                            {
+                                for (auto& mesh : model->meshes)
+                                {
+                                    auto& instance = m_level->meshes.emplace_back();
+                                    instance.mesh = &mesh;
+                                    instance.bounds = mesh.bounds;
+                                    instance.modelMatrix = instance.transform.AsMatrix();
+
+                                    const glm::vec3 lightReferencePosition = (mesh.bounds.min + mesh.bounds.max) / 2.0f;
+                                    GetClosestLights(*m_level, lightReferencePosition, instance.lights);
+                                }
+                            }
+
+                            m_renderer->InitializeLevel(*m_level);
+
+                            LOG("Imported Geometry %s", filePath.c_str());
+                        }
+
+                        if (result.boxColliders.size() > 0)
+                        {
+                            m_level->boxColliders = std::move(result.boxColliders);
+                        }
+
+                        if (result.meshColliders.size() > 0)
+                        {
+                            m_level->meshColliders = std::move(result.meshColliders);
+                        }
+
+                        InitializeColliders();
                     }
                 }
-            }
-            if (m_level)
-            {
-                ImGui::Separator();
-                if (ImGui::MenuItem("Instantiate Model"))
+                if (ImGui::MenuItem("Import Texture"))
                 {
-                    const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    const std::string filePath = OpenFileDialog(TextureFileTypes, NumTextureFiles);
 
                     if (!filePath.empty())
                     {
-                        std::shared_ptr<Model> model = m_modelLoader->Load(filePath);
-
-                        if (model)
+                        std::shared_ptr<Texture> texture = std::make_shared<Texture>();
+                        if (ImportTexture(filePath, *texture))
                         {
-                            auto& obj = m_level->staticObjects.emplace_back();
-                            obj.model = model;
-                            obj.name = model->name;
-
-                            m_renderer->InitializeLevel(*m_level);
-                        }
-                        else
-                        {
-                            LOG_ERROR("Could not load model %s", filePath.c_str());
+                            const std::string outPath = OpenFileDialog({}, 0, true);
+                            if (!outPath.empty())
+                            {
+                                const std::string absPath = outPath + "\\" + FileIO::GetFileName(filePath) + TextureFileExt;
+                                m_assets.AddAsset<Texture>(texture, absPath, filePath);
+                            }
                         }
                     }
                 }
-                if (ImGui::MenuItem("Create Cube"))
+                ImGui::Separator();
+                if (ImGui::MenuItem("Edit Material"))
                 {
-                    auto& obj = m_level->staticObjects.emplace_back();
-                    obj.model = m_modelLoader->Load("Cube");
-                    obj.name = "Cube";
-
-                    m_renderer->InitializeLevel(*m_level);
+                    const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        m_editInfo.material = m_assets.Load<Material>(filePath);
+                        m_editInfo.showMaterialEditor = true;
+                    }
                 }
+                if (ImGui::MenuItem("Edit Animation"))
+                {
+                    const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        m_editInfo.animation = m_assets.Load<Animation>(filePath);
+                        m_editInfo.showAnimEditor = m_editInfo.animation != nullptr;
+                    }
+                }
+                if (m_level)
+                {
+                    ImGui::Separator();
+                    if (ImGui::MenuItem("Instantiate Model"))
+                    {
+                        const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+
+                        if (!filePath.empty())
+                        {
+                            std::shared_ptr<Model> model = m_assets.Load<Model>(filePath);
+                            // todo: check if model is already in level
+
+                            if (model)
+                            {
+                                m_level->models.emplace_back(model);
+
+                                for (auto& mesh : model->meshes)
+                                {
+                                    auto& instance = m_level->meshes.emplace_back();
+                                    instance.mesh = &mesh;
+                                    instance.bounds = mesh.bounds;
+                                    instance.modelMatrix = instance.transform.AsMatrix();
+                                    const glm::vec3 lightReferencePosition = (mesh.bounds.min + mesh.bounds.max) / 2.0f;
+                                    GetClosestLights(*m_level, lightReferencePosition, instance.lights);
+                                }
+
+                                m_renderer->InitializeLevel(*m_level);
+                            }
+                            else
+                            {
+                                LOG_ERROR("Could not load model %s", filePath.c_str());
+                            }
+                        }
+                    }
+                    if (ImGui::MenuItem("Create Cube"))
+                    {
+                        auto cubeModel = m_assets.Load<Model>("Cube");
+                        m_level->models.emplace_back(cubeModel);
+
+                        auto& obj = m_level->meshes.emplace_back();
+                        obj.name = "Cube";
+                        obj.mesh = &cubeModel->meshes[0];
+                        
+                        UpdateBounds(obj);
+
+                        m_renderer->InitializeLevel(*m_level);
+                    }
+                }
+                if (ImGui::MenuItem("Asset Registry"))
+                {
+                    m_editInfo.showRegistryWindow = true;
+                }
+                ImGui::EndMenu();
             }
-            ImGui::EndMenu();
-        }
 
-        if (ImGui::MenuItem("Lighting Settings"))
-        {
-            m_editInfo.showLightingWindow = true;
-        }
+            if (ImGui::MenuItem("Lighting Settings"))
+            {
+                m_editInfo.showLightingWindow = true;
+            }
 
-        if (ImGui::MenuItem("Lara Settings"))
-        {
-            m_editInfo.showLaraWindow = true;
+            if (ImGui::MenuItem("Lara Settings"))
+            {
+                m_editInfo.showLaraWindow = true;
+            }
         }
 
         ImGui::EndMainMenuBar();
@@ -1329,6 +1483,11 @@ namespace TombForge
         if (m_editInfo.showLaraWindow)
         {
             DrawLaraWindow();
+        }
+
+        if (m_editInfo.showRegistryWindow)
+        {
+            DrawRegistryWindow();
         }
 
         // Inspector
@@ -1408,7 +1567,7 @@ namespace TombForge
                 const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
                 if (!texturePath.empty())
                 {
-                    m_editInfo.material->diffuse = m_textureLoader->Load(texturePath);
+                    m_editInfo.material->diffuse = m_assets.Load<Texture>(texturePath);
                     if (m_editInfo.material->diffuse)
                     {
                         m_editInfo.material->AddFlag(MATERIAL_FLAG_DIFFUSE);
@@ -1434,7 +1593,7 @@ namespace TombForge
             ImGui::Separator();
             if (ImGui::Button("Save"))
             {
-                m_editInfo.material->SaveJson();
+                m_assets.SaveAsset(m_editInfo.material);
             }
             ImGui::SameLine();
         }
@@ -1448,7 +1607,9 @@ namespace TombForge
 
     void Engine::DrawAnimEditor()
     {
-        ImGui::Begin("Anim Editor");
+        ImGui::SetNextWindowSize({ 480, 520 }, ImGuiCond_FirstUseEver);
+        ImGui::Begin("Anim Editor", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+
         if (!m_editInfo.animation)
         {
             ImGui::Text("No anim selected");
@@ -1456,13 +1617,30 @@ namespace TombForge
             return;
         }
 
-        Animation* anim = m_editInfo.animation.get();
+        auto anim = m_editInfo.animation;
 
-        ImGui::Text("Name: %s", m_editInfo.animation->name.c_str());
+        ImGui::InputText("Name: %s", &anim->name);
+
+        ImGui::SeparatorText("Settings");
         ImGui::Checkbox("Root Motion", &m_editInfo.animation->hasRootMotion);
-        ImGui::Text("FPS: %f", m_editInfo.animation->framerate);
-        ImGui::Text("Length (frames): %f", m_editInfo.animation->length);
-        ImGui::Text("Length (s): %f", m_editInfo.animation->length / m_editInfo.animation->framerate);
+
+        ImGui::SeparatorText("Info");
+        ImGui::Columns(2, nullptr, false);
+
+        ImGui::SetColumnWidth(0, 180.0f);
+        ImGui::Text("FPS:");
+        ImGui::Text("Length (frames):");
+        ImGui::Text("Length (s):");
+        ImGui::Text("Key Count:");
+
+        ImGui::NextColumn();
+        ImGui::SetNextItemWidth(-1);
+        ImGui::Text("%.2f", anim->framerate);
+        ImGui::Text("%.2f", anim->length);
+        ImGui::Text("%.2f", anim->length / anim->framerate);
+        ImGui::Text("%i", anim->keys.size());
+
+        ImGui::Columns(1);
         ImGui::SeparatorText("Events");
         for (size_t i = 0; i < anim->events.size(); i++)
         {
@@ -1479,29 +1657,46 @@ namespace TombForge
                 }
                 ImGui::EndCombo();
             }
-            ImGui::InputFloat("Time", &key.time);
+            ImGui::SameLine();
+            ImGui::InputFloat("Time", &key.time, 0.0f, 0.0f, "%.2f");
+            ImGui::SameLine();
             if (ImGui::Button("Remove"))
             {
                 anim->events.erase(anim->events.begin() + i);
+                ImGui::PopID();
+                break; // to avoid issues with changed indices
             }
             ImGui::PopID();
         }
+
         if (ImGui::Button("Add Event"))
         {
             anim->events.emplace_back();
         }
+
         ImGui::Separator();
+
         if (ImGui::Button("Save"))
         {
             std::sort(anim->events.begin(), anim->events.end(), [](EventKey& key1, EventKey& key2) { return key1.time < key2.time; });
-            anim->SaveBinary();
+            m_assets.SaveAsset(anim);
         }
+
         ImGui::SameLine();
+
+        if (m_lara.model && m_lara.animPlayer.IsValid() && ImGui::Button("Preview"))
+        {
+            m_lara.animPlayer.Play(anim, true);
+        }
+
+        ImGui::SameLine();
+
         if (ImGui::Button("Close"))
         {
             m_editInfo.animation = nullptr;
             m_editInfo.showAnimEditor = false;
         }
+
         ImGui::End();
     }
 
@@ -1536,9 +1731,18 @@ namespace TombForge
                         const char* name = staticObj.mesh->name.size() > 0 ? staticObj.mesh->name.c_str() : "#UNNAMED!";
                         if (ImGui::Selectable(name, &selected))
                         {
-                            m_editInfo.selectedObject = i;
-                            s_eulerRotation = staticObj.transform.EulerRotation();
-                            m_editInfo.isDragging = true;
+                            if (m_editInfo.selectedObject == i)
+                            {
+                                m_editInfo.isDragging = false;
+                                s_eulerRotation = {};
+                                m_editInfo.selectedObject = SIZE_MAX;
+                            }
+                            else
+                            {
+                                m_editInfo.selectedObject = i;
+                                s_eulerRotation = staticObj.transform.EulerRotation();
+                                m_editInfo.isDragging = true;
+                            }
                         }
                         ImGui::PopID();
                     }
@@ -1592,6 +1796,23 @@ namespace TombForge
             {
                 for (size_t l = 0; l < m_level->pointLights.size(); l++)
                 {
+                    if (m_editInfo.selectedObject < m_level->meshes.size())
+                    {
+                        bool found = false;
+                        for (auto& light : m_level->meshes[m_editInfo.selectedObject].lights)
+                        {
+                            if (light == l)
+                            {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found)
+                        {
+                            continue;
+                        }
+                    }
+
                     bool selected = m_editInfo.selectedPointLight == l;
                     if (ImGui::Selectable(std::to_string(l).c_str(), &selected))
                     {
@@ -1649,10 +1870,19 @@ namespace TombForge
             if (ImGui::Button("Select Skeleton"))
             {
                 const std::string skeletonPath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
-
-                settings.existingSkeleton = std::make_shared<Skeleton>();
-                settings.existingSkeleton->name = skeletonPath;
-                settings.existingSkeleton->Load();
+                const AssetId id = m_assets.GetAssetId(skeletonPath);
+                if (IsValidAssetId(id))
+                {
+                    settings.existingSkeleton = m_assets.Load<Skeleton>(id);
+                }
+            }
+            if (settings.existingSkeleton)
+            {
+                ImGui::Text("Using Skeleton: %s", settings.existingSkeleton->name.c_str());
+            }
+            else
+            {
+                ImGui::Text("No Skeleton Selected");
             }
         }
 
@@ -1713,11 +1943,6 @@ namespace TombForge
 
                         if (result.model && settings.importModel)
                         {
-                            if (result.model->SaveBinary())
-                            {
-                                LOG("Saved model %s", settings.modelPath.c_str());
-                            }
-
                             for (auto& mesh : result.model->meshes)
                             {
                                 if (!mesh.material)
@@ -1725,35 +1950,25 @@ namespace TombForge
                                     continue;
                                 }
 
-                                if (mesh.material->SaveJson())
-                                {
-                                    LOG("Saved material %s", mesh.material->name.c_str());
-                                }
-
                                 if (mesh.material->diffuse)
                                 {
-                                    if (mesh.material->diffuse->SaveBinary())
-                                    {
-                                        LOG("Saved texture %s", mesh.material->diffuse->name);
-                                    }
+                                    m_assets.AddAsset(mesh.material->diffuse, mesh.material->diffuse->name, filePath);
                                 }
+
+                                m_assets.AddAsset(mesh.material, mesh.material->name, filePath);
                             }
+
+                            m_assets.AddAsset(result.model, settings.modelPath, filePath);
                         }
 
                         if (result.skeleton && settings.importSkeleton)
                         {
-                            if (result.skeleton->SaveBinary())
-                            {
-                                LOG("Saved skeleton %s", settings.skeletonPath.c_str());
-                            }
+                            m_assets.AddAsset(result.skeleton, settings.skeletonPath, filePath);
                         }
 
                         if (result.animation && settings.importAnimation)
                         {
-                            if (result.animation->SaveBinary())
-                            {
-                                LOG("Saved anim %s", settings.animationPath.c_str());
-                            }
+                            m_assets.AddAsset(result.animation, settings.animationPath, filePath);
                         }
                     }
                     else
@@ -1765,6 +1980,8 @@ namespace TombForge
                 LOG("Imported Finished");
                 m_editInfo.assetImport.Finish();
                 m_editInfo.showImportWindow = false;
+
+                m_assets.Save();
             }
             else
             {
@@ -1784,61 +2001,188 @@ namespace TombForge
 
     void Engine::DrawLaraWindow()
     {
-        ImGui::Begin("Lara Settings");
+        ImGui::SetNextWindowSize({ 520.0f, 700.0f }, ImGuiCond_FirstUseEver);
+        ImGui::Begin("Lara Settings", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
 
         if (ImGui::InputFloat3("Position", &m_lara.transform.position.x))
         {
             OnLaraTransformUpdate();
         }
+        glm::vec3 eulers = m_lara.transform.EulerRotation();
+        if (ImGui::InputFloat3("Rotation", &eulers.x))
+        {
+            m_lara.transform.SetEulers(glm::radians(eulers.x), glm::radians(eulers.y), glm::radians(eulers.z));
+            OnLaraTransformUpdate();
+        }
+        if (ImGui::InputFloat3("Scale", &m_lara.transform.scale.x))
+        {
+            OnLaraTransformUpdate();
+        }
 
         ImGui::SeparatorText("Model");
-
-        if (m_lara.model)
-        {
-            ImGui::Text("Lara: %s", m_lara.model->name.c_str());
-        }
-        else
-        {
-            ImGui::Text("Lara: Null");
-        }
+        ImGui::Text("Asset: %s", m_lara.model ? m_lara.model->name.c_str() : "Empty");
 
         if (ImGui::Button("Set Lara Model"))
         {
             const std::string& filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
             if (!filePath.empty())
             {
-                m_editInfo.projectSettings.laraPath = filePath;
+                m_editInfo.projectSettings.laraPath = m_assets.GetAssetId(filePath);
                 SetupLara();
             }
         }
 
         if (m_lara.model)
         {
+            ImGui::SeparatorText("Meshes");
+            ImGui::BeginChild("MeshList", { 500, 300 });
             for (size_t i = 0; i < m_lara.model->meshes.size(); i++)
             {
-                ImGui::PushID(i);
                 auto& mesh = m_lara.model->meshes[i];
-                ImGui::SeparatorText(mesh.name.c_str());
+                ImGui::PushID(i);
+                ImGui::Text("Mesh %i: %s", i, mesh.name.c_str());
+                ImGui::Text("Material: %s", mesh.material ? mesh.material->name.c_str() : "Empty");
+
+                if (ImGui::Button("Set Material"))
+                {
+                    const std::string& filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        mesh.material = m_assets.Load<Material>(filePath);
+                    }
+                }
                 ImGui::Checkbox("Is Active", &mesh.isActive);
                 ImGui::PopID();
+                ImGui::Separator();
             }
+            ImGui::EndChild();
 
             ImGui::SeparatorText("Skeleton");
-
             const auto& skel = m_lara.model->skeleton;
-
+            ImGui::BeginChild("SkeletonBones", { 500, 300 });
             for (size_t b = 0; b < skel->bones.size(); b++)
             {
+                auto& bone = skel->bones[b];
+
+                glm::vec3 bonePosition{};
+                glm::vec3 boneScale{};
+                glm::quat boneRotation{};
+                glm::vec3 skew{}; // ignored
+                glm::vec4 perspective{}; // ignored
+                glm::decompose(bone.transform, boneScale, boneRotation, bonePosition, skew, perspective);
+
+                glm::vec3 offsetPosition{};
+                glm::vec3 offsetScale{};
+                glm::quat offsetRotation{};
+                glm::decompose(bone.offset, offsetScale, offsetRotation, offsetPosition, skew, perspective);
+
                 ImGui::PushID(b);
-                ImGui::Text("Bone %i: %s parent: %i", b, skel->bones[b].name.c_str(), skel->bones[b].parent);
+                ImGui::Text("Bone %zu: %s (parent: %i)", b, bone.name.c_str(), bone.parent);
+
+                ImGui::Text("Transform");
+                ImGui::InputFloat3("Pos", &bonePosition.x);
+                glm::vec3 eulersBone = glm::degrees(glm::eulerAngles(boneRotation));
+                ImGui::InputFloat3("Rot", &eulersBone.x);
+                ImGui::InputFloat3("Scale", &boneScale.x);
+
+                ImGui::Text("Offset");
+                ImGui::InputFloat3("Pos##off", &offsetPosition.x);
+                glm::vec3 eulersOffset = glm::degrees(glm::eulerAngles(offsetRotation));
+                ImGui::InputFloat3("Rot##off", &eulersOffset.x);
+                ImGui::InputFloat3("Scale##off", &offsetScale.x);
+
+                ImGui::Separator();
                 ImGui::PopID();
             }
+            ImGui::EndChild();
+        }
+        else
+        {
+            ImGui::Text("No model loaded.");
+        }
+
+        if (m_lara.model && ImGui::Button("Save Model"))
+        {
+            m_assets.SaveAsset(m_lara.model);
+            ImGui::SameLine();
         }
 
         if (ImGui::Button("Close"))
         {
             m_editInfo.showLaraWindow = false;
         }
+        ImGui::End();
+    }
+
+    void Engine::DrawRegistryWindow()
+    {
+        ImGui::SetNextWindowSize({ 700.0f, 500.0f }, ImGuiCond_FirstUseEver);
+        ImGui::Begin("Asset Registry");
+
+        ImGui::Text("Total Assets: %zu", m_assets.m_assets.size());
+        ImGui::Separator();
+
+        ImGui::Columns(4, "assetColumns");
+        ImGui::Text("ID"); ImGui::NextColumn();
+        ImGui::Text("Type"); ImGui::NextColumn();
+        ImGui::Text("Asset Path"); ImGui::NextColumn();
+        ImGui::Text("Source Path"); ImGui::NextColumn();
+        ImGui::Separator();
+
+        for (const auto& [id, meta] : m_assets.m_assets)
+        {
+            ImGui::Text("%zu", id); 
+            ImGui::NextColumn();
+
+            // Convert AssetType to string
+            const char* typeStr = "Unknown";
+            switch (meta.type)
+            {
+                case ASSET_TYPE_MODEL:
+                    typeStr = "Model";
+                    break;
+                case ASSET_TYPE_TEXTURE:
+                    typeStr = "Texture";
+                    break;
+                case ASSET_TYPE_MATERIAL:
+                    typeStr = "Material";
+                    break;
+                case ASSET_TYPE_ANIMATION:
+                    typeStr = "Animation";
+                    break;
+                case ASSET_TYPE_SKELETON:
+                    typeStr = "Skeleton";
+                    break;
+                case ASSET_TYPE_LEVEL:
+                    typeStr = "Level";
+                    break;
+                default:
+                    break;
+            }
+            ImGui::TextUnformatted(typeStr); 
+            ImGui::NextColumn();
+
+            ImGui::TextUnformatted(meta.assetPath.c_str()); 
+            ImGui::NextColumn();
+
+            ImGui::TextUnformatted(meta.sourcePath.c_str());
+            ImGui::NextColumn();
+        }
+
+        ImGui::Columns(1);
+
+        if (ImGui::Button("Save"))
+        {
+            m_assets.Save();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Close"))
+        {
+            m_editInfo.showRegistryWindow = false;
+        }
+
         ImGui::End();
     }
 #endif
