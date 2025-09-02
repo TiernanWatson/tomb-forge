@@ -67,6 +67,12 @@ namespace TombForge
     static constexpr unsigned int NumAodFiles{ 1 };
     static constexpr unsigned int NumTextureFiles{ 1 };
 
+    static constexpr AssetId DebugTextureId = 0;
+    static constexpr AssetId DebugMaterialId = 1;
+    static constexpr AssetId CubeId = 2;
+    static constexpr AssetId ConeId = 3;
+    static constexpr AssetId ArrowId = 4;
+
     static constexpr COMDLG_FILTERSPEC TombSlateFileTypes[] =
     {
         { L"TombForge Asset", L"*.tombs;*.tfskel;*.tfanim;*.tfmod;*.tftex;*.tfmat;*.tflev;*.tfproj" }
@@ -704,6 +710,7 @@ namespace TombForge
 
         std::shared_ptr<Texture> debugTexture = std::make_shared<Texture>();
         GenerateDebugTexture(*debugTexture, glm::ivec4{ 20, 50, 200, 255 }, glm::ivec4{ 20, 20, 20, 255 });
+        debugTexture->id = DebugTextureId;
         debugTexture->name = "Debug Texture";
         m_assets.AddAssetBuiltin(debugTexture);
 
@@ -712,6 +719,7 @@ namespace TombForge
         std::shared_ptr<Material> debugMaterial = std::make_shared<Material>();
         debugMaterial->diffuse = debugTexture;
         debugMaterial->AddFlag(MATERIAL_FLAG_DIFFUSE);
+        debugMaterial->id = DebugMaterialId;
         debugMaterial->name = "Debug Material";
         m_assets.AddAssetBuiltin(debugMaterial);
 
@@ -720,6 +728,7 @@ namespace TombForge
         std::shared_ptr<Model> cube = std::make_shared<Model>();
         MakeUnitCube(*cube);
         cube->meshes[0].material = debugMaterial;
+        cube->id = CubeId;
         cube->name = "Cube";
         m_assets.AddAssetBuiltin(cube);
 
@@ -728,6 +737,7 @@ namespace TombForge
         std::shared_ptr<Model> cone = std::make_shared<Model>();
         MakeUnitCone(*cone, 4);
         cone->meshes[0].material = debugMaterial;
+        cone->id = ConeId;
         cone->name = "Cone";
         m_assets.AddAssetBuiltin(cone);
 
@@ -736,6 +746,7 @@ namespace TombForge
         std::shared_ptr<Model> arrow = std::make_shared<Model>();
         MakeUnitArrow(*arrow);
         arrow->meshes[0].material = debugMaterial;
+        arrow->id = ArrowId;
         arrow->name = "Arrow";
         m_assets.AddAssetBuiltin(arrow);
     }
