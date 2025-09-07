@@ -125,6 +125,11 @@ namespace TombForge
         FillRenderQueues(0, level, cameraPlanes, m_opaqueQueue, m_transparentQueue);
         PerformRenderPass(level, m_opaqueQueue, m_transparentQueue);
 
+        RenderLara(level, lara, camera);
+    }
+
+    void Renderer::RenderLara(const Level& level, const Lara& lara, const Camera& camera)
+    {
         if (lara.model)
         {
             MeshLightArray laraLights{};

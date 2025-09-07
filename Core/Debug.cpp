@@ -7,12 +7,18 @@
 
 namespace TombForge::Debug
 {
-    // TODO: Use this to limit number of messages
-    static constexpr size_t MaxDebugMessages{ 1024 };
+    namespace
+    {
+        constexpr size_t MaxDebugMessages{ 1024 };
 
-    static std::vector<DbgMessage> s_messages{};
+        std::vector<DbgMessage> messages{};
+        size_t startIndex{};
+    }
 
-    static size_t s_startingIndex{};
+    void Init()
+    {
+        messages.reserve(MaxDebugMessages);
+    }
 
     void Log(DbgVerbosity verbosity, const std::string& file, int line, const std::string& message, ...)
     {
@@ -23,15 +29,37 @@ namespace TombForge::Debug
         vsnprintf(result, 1024, message.c_str(), args);
         va_end(args);
 
-        s_messages.emplace_back(result, file, line, verbosity);
+        if (messages.size() >= MaxDebugMessages)
+        {
+            if (startIndex >= MaxDebugMessages)
+            {
+                startIndex = 0;
+            }
+            messages.emplace(messages.begin() + startIndex++, DbgMessage{ result, file, line, verbosity });
+        }
+        else
+        {
+            messages.emplace_back(result, file, line, verbosity);
+        }
     }
 
     void MessageLoop(std::function<void(const DbgMessage&)> callback)
     {
-        for (const auto& msg : s_messages)
+        for (auto it = messages.begin() + startIndex; it != messages.end(); it++)
         {
-            callback(msg);
+            callback(*it);
         }
+
+        for (auto it = messages.begin(); it != messages.begin() + startIndex; it++)
+        {
+            callback(*it);
+        }
+    }
+
+    void Clear()
+    {
+        messages.clear();
+        startIndex = 0;
     }
 }
 

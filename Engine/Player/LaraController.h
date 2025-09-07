@@ -21,7 +21,7 @@ namespace TombForge
 
         // Animations
 
-        void SetAnimation(LaraAnim id, float fadeTime = 0.0f, bool loop = true);
+        void SetAnimation(LaraAnim id, float fadeTime = 0.0f, bool loop = true, float targetFrame = 0.0f);
 
         void SetRootMotion(RootMotionMode mode);
 

@@ -618,6 +618,10 @@ namespace TombForge
         ImGui::SetNextWindowSize({ 350.0f, m_ctx.windowHeight - ImGui::GetTextLineHeightWithSpacing() - 30.0f }, ImGuiCond_Always);
         ImGui::SetNextWindowPos({ 0.0f, ImGui::GetTextLineHeightWithSpacing() }, ImGuiCond_Always);
         ImGui::Begin("Log", 0, statsFlags);
+        if (ImGui::Button("Clear"))
+        {
+            DEBUG_CLEAR();
+        }
         Debug::MessageLoop(PrintDebugMessage);
         ImGui::End();
 
@@ -629,7 +633,7 @@ namespace TombForge
         ImGui::SetNextWindowSize({ static_cast<float>(m_ctx.windowWidth), 30.0f }, ImGuiCond_Always);
         ImGui::SetNextWindowPos({ 0.0f, m_ctx.windowHeight - 30.0f }, ImGuiCond_Always);
         ImGui::Begin("Stats", 0, statsFlags);
-        ImGui::Text("FPS: %i - Camera Pos: (%f, %f, %f) - Camera Rot: (%f, %f, %f)",
+        ImGui::Text("FPS: %i / Camera Position: (%f, %f, %f) / Camera Rotation: (%f, %f, %f)",
             m_ctx.debugData.fps,
             camTransform.position.x,
             camTransform.position.y,
@@ -802,13 +806,6 @@ namespace TombForge
         {
             std::sort(anim->events.begin(), anim->events.end(), [](EventKey& key1, EventKey& key2) { return key1.time < key2.time; });
             m_ctx.assetRegistry.SaveAsset(anim);
-        }
-
-        ImGui::SameLine();
-
-        if (m_ctx.lara.model && m_ctx.lara.animPlayer.IsValid() && ImGui::Button("Preview"))
-        {
-            m_ctx.lara.animPlayer.Play(anim, true);
         }
 
         ImGui::SameLine();

@@ -11,7 +11,7 @@ namespace TombForge
     {
     }
 
-    void LaraController::SetAnimation(LaraAnim id, float fadeTime, bool loop)
+    void LaraController::SetAnimation(LaraAnim id, float fadeTime, bool loop, float targetFrame)
     {
         if (!m_lara->animations[id])
         {
@@ -20,11 +20,11 @@ namespace TombForge
 
         if (fadeTime == 0.0f)
         {
-            m_lara->animPlayer.Play(m_lara->animations[id], loop);
+            m_lara->animPlayer.Play(m_lara->animations[id], loop, targetFrame);
         }
         else
         {
-            m_lara->animPlayer.BlendTo(m_lara->animations[id], fadeTime, loop);
+            m_lara->animPlayer.BlendTo(m_lara->animations[id], fadeTime, loop, targetFrame);
         }
 
         m_lara->animIndex = id;

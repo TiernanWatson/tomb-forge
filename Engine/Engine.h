@@ -19,7 +19,7 @@ namespace TombForge
     struct DebugData
     {
         double lastFpsUpdate{};
-        float fps{};
+        int fps{};
         int framesThisSecond{};
     };
 

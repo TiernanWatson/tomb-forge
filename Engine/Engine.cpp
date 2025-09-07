@@ -465,6 +465,8 @@ namespace TombForge
 
     bool InitEngine(EngineContext& ctx)
     {
+        DEBUG_INIT();
+
         const Config& config = Config::Get();
 
         if (!glfwInit())

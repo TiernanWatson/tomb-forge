@@ -160,7 +160,6 @@
     <ClCompile Include="Core\IO\DevIO.cpp" />
     <ClCompile Include="Core\IO\FileIO.cpp" />
     <ClCompile Include="Core\Maths\Transform.cpp" />
-    <ClCompile Include="Engine_old.cpp" />
     <ClCompile Include="Engine\Animation\Animation.cpp" />
     <ClCompile Include="Engine\Animation\AnimPlayer.cpp" />
     <ClCompile Include="Engine\Animation\Skeleton.cpp" />
@@ -215,7 +214,6 @@
     <ClInclude Include="Core\IO\FileIO.h" />
     <ClInclude Include="Core\Maths\Maths.h" />
     <ClInclude Include="Core\Maths\Transform.h" />
-    <ClInclude Include="Engine_old.h" />
     <ClInclude Include="Engine\Animation\Animation.h" />
     <ClInclude Include="Engine\Animation\AnimPlayer.h" />
     <ClInclude Include="Engine\Animation\Skeleton.h" />

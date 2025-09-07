@@ -23,9 +23,10 @@ namespace TombForge::Debug
         DbgVerbosity verbosity{};
     };
 
+    void Init();
     void Log(DbgVerbosity verbosity, const std::string& file, int line, const std::string& message, ...);
-
     void MessageLoop(std::function<void(const DbgMessage&)> callback);
+    void Clear();
 }
 
 
@@ -39,12 +40,17 @@ if (!(condition)) { \
     abort(); \
 }
 
+#define DEBUG_INIT() ::TombForge::Debug::Init();
+
+#define DEBUG_CLEAR() ::TombForge::Debug::Clear();
+
 #else
 
 #define LOG
 #define LOG_WARNING
 #define LOG_ERROR
 #define ASSERT
+#define DEBUG_INIT
 
 #endif
 

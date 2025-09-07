@@ -19,6 +19,7 @@ namespace TombForge
     struct Model;
     struct Lara;
     struct Camera;
+    struct AnimPlayer;
 
     enum OctDirection : uint8_t
     {
@@ -64,8 +65,6 @@ namespace TombForge
     public:
         Renderer();
 
-        //bool Initialize(Graphics& graphics);
-
         // When a level is loaded, call this to set it up with the renderer
         bool InitializeLevel(Level& level);
 
@@ -77,6 +76,9 @@ namespace TombForge
 
         // Called once per frame to render the level
         void RenderLevel(const Level& level, const Lara& lara, const Camera& camera);
+
+        // Renders just Lara (useful for debugging as well as normal rendering)
+        void RenderLara(const Level& level, const Lara& lara, const Camera& camera);
 
         // Sets the camera view and projection matrices in the shader
         void SetCamera(const Transform& transform, float fovY, float aspect, float near, float far);
