@@ -14,7 +14,7 @@ namespace TombForge
     {
         m_currentAnim.Clear();
         m_currentAnim.clip = animation;
-        m_currentAnim.shouldLoop = loop;
+        m_currentAnim.isLooping = loop;
         m_currentAnim.currentFrame = targetFrame;
         m_currentAnim.previousRootPosition = GetPosition(animation->keys[0].positions, m_currentAnim.currentFrame, m_defaultPositions[0], loop, true);
         m_currentAnim.previousRootRotation = GetRotation(animation->keys[0].rotations, m_currentAnim.currentFrame, m_defaultRotations[0]);
@@ -39,7 +39,7 @@ namespace TombForge
 
         m_currentAnim.Clear();
         m_currentAnim.clip = animation;
-        m_currentAnim.shouldLoop = loop;
+        m_currentAnim.isLooping = loop;
         m_currentAnim.currentFrame = targetFrame;
         m_currentAnim.previousRootPosition = GetPosition(animation->keys[0].positions, targetFrame, m_defaultPositions[0], loop);
         m_currentAnim.previousRootRotation = GetRotation(animation->keys[0].rotations, targetFrame, m_defaultRotations[0]);
@@ -65,7 +65,7 @@ namespace TombForge
             const BoneKeys& keys = m_currentAnim.clip->keys[boneIndex];
             Transform& finalPose = m_finalPose.bones[boneIndex];
 
-            finalPose.position = GetPosition(keys.positions, m_currentAnim.currentFrame, m_defaultPositions[boneIndex], m_currentAnim.shouldLoop, boneIndex == 0);
+            finalPose.position = GetPosition(keys.positions, m_currentAnim.currentFrame, m_defaultPositions[boneIndex], m_currentAnim.isLooping, boneIndex == 0);
             if (boneIndex == 0 && extractRootMovement)
             {
                 m_rootDelta = m_currentAnim.CalculateRootDelta(finalPose.position);
@@ -90,7 +90,7 @@ namespace TombForge
                 if (!m_wasInterrupted)
                 {
                     // When interrupted, we use the last computed pose staticly, so we can have responsiveness and visual fidelity
-                    blendPose.position = GetPosition(previousKeys.positions, m_previousAnim.currentFrame, m_defaultPositions[boneIndex], m_previousAnim.shouldLoop, boneIndex == 0);
+                    blendPose.position = GetPosition(previousKeys.positions, m_previousAnim.currentFrame, m_defaultPositions[boneIndex], m_previousAnim.isLooping, boneIndex == 0);
                     blendPose.rotation = GetRotation(previousKeys.rotations, m_previousAnim.currentFrame, m_defaultRotations[boneIndex]);
                     blendPose.scale = GetScale(previousKeys.scales, m_previousAnim.currentFrame, m_defaultScales[boneIndex]);
                 }
@@ -320,7 +320,7 @@ namespace TombForge
         }
     }
 
-    glm::vec3 AnimPlayer::AnimPlaybackInfo::CalculateRootDelta(glm::vec3 newPosition)
+    glm::vec3 AnimPlayer::AnimationState::CalculateRootDelta(glm::vec3 newPosition)
     {
         const auto& keys = clip->keys[0].positions;
 
@@ -335,7 +335,7 @@ namespace TombForge
         return result;
     }
 
-    glm::quat AnimPlayer::AnimPlaybackInfo::CalculateRootRotDelta(const glm::quat& newRot)
+    glm::quat AnimPlayer::AnimationState::CalculateRootRotDelta(const glm::quat& newRot)
     {
         const auto& keys = clip->keys[0].rotations;
 
@@ -353,12 +353,12 @@ namespace TombForge
         return result;
     }
 
-    void AnimPlayer::AnimPlaybackInfo::AdvanceFrame(float deltaTime)
+    void AnimPlayer::AnimationState::AdvanceFrame(float deltaTime)
     {
         previousFrame = currentFrame;
 
         currentFrame += deltaTime * clip->framerate;
-        if (shouldLoop)
+        if (isLooping)
         {
             // We add one to account for if the loop relies on the blend 
             // between last and first frame (i.e. first frame =/= last frame)
@@ -371,7 +371,7 @@ namespace TombForge
         }
     }
 
-    void AnimPlayer::AnimPlaybackInfo::Clear()
+    void AnimPlayer::AnimationState::Clear()
     {
         clip = nullptr;
         currentFrame = 0.0f;
@@ -379,6 +379,6 @@ namespace TombForge
         previousRootRotation = { 1.0f, 0.0f, 0.0f, 0.0f };
         previousFrame = 0.0f;
         loopCount = 0;
-        shouldLoop = false;
+        isLooping = false;
     }
 }
