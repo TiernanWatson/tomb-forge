@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <glm/vec3.hpp>
 
-#if DEVSLATE
-#include "../Rendering/JoltDebugRenderer.h"
+#if EDITOR_ENABLED
+#include "Engine/Rendering/JoltDebugRenderer.h"
 #define DEBUG_RAY(physInterface, ray, color) physInterface.DebugRenderer()->DrawColoredLine(ray.origin, ray.origin + ray.direction, color)
 #define DEBUG_RAY(physInterface, ray) physInterface.DebugRenderer()->DrawColoredLine(ray.origin, ray.origin + ray.direction, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f})
 #else
@@ -59,7 +59,7 @@ namespace TombForge
 
         void SetPlayerCollidesWorld(bool value);
 
-#if DEVSLATE
+#if EDITOR_ENABLED
         inline JoltDebugRenderer* DebugRenderer() const
         {
             return m_debugRenderer;
@@ -104,7 +104,7 @@ namespace TombForge
         PlayerBpFilter* m_playerBpFilter{};
         PlayerLayerFilter* m_playerObjFilter{};
 
-#if DEVSLATE
+#if EDITOR_ENABLED
         JoltDebugRenderer* m_debugRenderer{};
 #endif
     };

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "LaraState.h"
+#include "Engine/Player/States/LaraState.h"
 
 namespace TombForge
 {

@@ -1,8 +1,9 @@
-#include "AABB.h"
+#include "Core/Graphics/AABB.h"
 
 #include <cmath>
 #include <limits>
-#include "../Maths/Maths.h"
+
+#include "Core/Maths/Maths.h"
 
 namespace TombForge
 {

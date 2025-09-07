@@ -1,11 +1,10 @@
-#include "LocomotionState.h"
+#include "Engine/Player/States/LocomotionState.h"
 
-#include <glm/vec3.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/vec3.hpp>
 
-#include "../Input.h"
-#include "../Lara.h"
-#include "../../Physics/PhysicsInterface.h"
+#include "Engine/Physics/PhysicsInterface.h"
+#include "Engine/Player/Input.h"
 
 namespace TombForge
 {

@@ -2,7 +2,7 @@
 
 #include <string>
 
-#include "Assets/AssetId.h"
+#include "Engine/Assets/AssetId.h"
 
 namespace TombForge
 {

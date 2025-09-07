@@ -1,12 +1,12 @@
 #pragma once
 
 #include <cstdint>
-#include <glm/vec3.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 #include <string>
 #include <vector>
 
-#include "../Assets/AssetId.h"
+#include "Engine/Assets/AssetId.h"
 
 namespace TombForge
 {

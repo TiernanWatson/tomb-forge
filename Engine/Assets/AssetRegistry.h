@@ -1,13 +1,13 @@
 #pragma once
 
-#include <string>
-#include <memory>
-#include <unordered_map>
 #include <cstdint>
+#include <memory>
+#include <string>
+#include <unordered_map>
 
-#include "../../Core/Debug.h"
-#include "../../Core/IO/FileIO.h"
-#include "AssetId.h"
+#include "Core/Debug.h"
+#include "Core/IO/FileIO.h"
+#include "Engine/Assets/AssetId.h"
 
 namespace TombForge
 {
@@ -38,6 +38,25 @@ namespace TombForge
         bool isBuiltin{}; // Whether or not this asset is built into the engine (cannot be deleted)
     };
 
+    // todo: add this to engine so that references to assets will update automatically
+    template<typename T>
+    class AssetHandle
+    {
+    public:
+        AssetHandle() = default;
+        AssetHandle(const std::shared_ptr<std::shared_ptr<T>>& handle) : m_handle(handle) {}
+
+        T* operator->() const { return m_handle ? m_handle->get() : nullptr; }
+        T& operator*()  const { return **m_handle; }
+        operator bool() const { return m_handle && *m_handle; }
+
+        std::shared_ptr<std::shared_ptr<T>>& GetHandle() { return m_handle; }
+        const std::shared_ptr<std::shared_ptr<T>>& GetHandle() const { return m_handle; }
+
+    private:
+        std::shared_ptr<std::shared_ptr<T>> m_handle{};
+    };
+
     class AssetRegistry
     {
     public:
@@ -50,7 +69,7 @@ namespace TombForge
         AssetRegistry& operator=(AssetRegistry&&) = delete;
 
         void Init(const std::string& projectPath);
-        void Save() const;
+        void Save();
 
         template<typename T>
         std::shared_ptr<T> Load(const AssetId id);
@@ -69,7 +88,17 @@ namespace TombForge
 
         AssetId GetAssetId(const std::string& path) const;
 
+        bool IsDirty() const;
+
     private:
+        template<AssetType T> struct AssetEnumToType;
+        template<> struct AssetEnumToType<ASSET_TYPE_MODEL> { using Type = Model; };
+        template<> struct AssetEnumToType<ASSET_TYPE_MATERIAL> { using Type = Material; };
+        template<> struct AssetEnumToType<ASSET_TYPE_TEXTURE> { using Type = Texture; };
+        template<> struct AssetEnumToType<ASSET_TYPE_ANIMATION> { using Type = Animation; };
+        template<> struct AssetEnumToType<ASSET_TYPE_SKELETON> { using Type = Skeleton; };
+        template<> struct AssetEnumToType<ASSET_TYPE_LEVEL> { using Type = Level; };
+
         template<typename T>
         struct AssetTraits;
 
@@ -150,6 +179,9 @@ namespace TombForge
         template<>
         void WriteAsset(const Level& asset, const AssetMeta& meta) const;
 
+        template<typename T>
+        bool SaveAssetIfDirty(const AssetId id, AssetMeta& meta);
+
         static constexpr AssetId ReservedAssetIdStart = 1000; // IDs below this are reserved for built-in assets
 
         std::string GetAbsolutePath(const std::string& path) const;
@@ -165,7 +197,10 @@ namespace TombForge
         std::string m_registryPath{};
         std::string m_basePath{};
 
+        AssetId m_nextId{ ReservedAssetIdStart };
+
         friend class Engine;
+        friend class Editor;
     };
 
     template<typename T>
@@ -198,9 +233,11 @@ namespace TombForge
     template<typename T>
     inline std::shared_ptr<T> AssetRegistry::Load(const std::string& path)
     {
+        const std::string finalPath = FileIO::IsAbsolutePath(path) ? FileIO::GetRelativePath(path, m_basePath) : path;
+
         for (const auto& [id, meta] : m_assets)
         {
-            if (meta.assetPath == path && meta.type == AssetTraits<T>::Type)
+            if (meta.assetPath == finalPath && meta.type == AssetTraits<T>::Type)
             {
                 return Load<T>(id);
             }
@@ -243,14 +280,28 @@ namespace TombForge
             return InvalidAssetId;
         }
 
+        if (path.empty())
+        {
+            LOG_ERROR("Tried to add asset with empty path");
+            return InvalidAssetId;
+        }
+
         std::string actualPath = path;
         if (FileIO::IsAbsolutePath(path))
         {
             actualPath = FileIO::GetRelativePath(path, m_basePath);
+            if (actualPath.empty())
+            {
+                LOG_ERROR("Tried to add asset with path outside of project directory: %s", path.c_str());
+                return InvalidAssetId;
+            }
         }
 
+        const AssetId possibleId = GetAssetId(actualPath);
+        const bool exists = IsValidAssetId(possibleId);
+
         AssetMeta meta{};
-        meta.id = ReservedAssetIdStart + m_assets.size();
+        meta.id = exists ? possibleId : m_nextId++;
         meta.assetPath = actualPath;
         meta.sourcePath = sourcePath;
         meta.type = AssetTraits<T>::Type;

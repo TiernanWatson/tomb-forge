@@ -1,31 +1,29 @@
-#include "Renderer.h"
-
-#include "../../Core/Graphics/Color.h"
-#include "../../Core/IO/FileIO.h"
-#include "../Animation/AnimPlayer.h"
-#include "../Levels/Level.h"
-#include "../Player/Lara.h"
-#include "Material.h"
+#include "Engine/Rendering/Renderer.h"
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include "Core/Graphics/Color.h"
+#include "Core/IO/FileIO.h"
+#include "Engine/Animation/AnimPlayer.h"
+#include "Engine/Levels/Level.h"
+#include "Engine/Player/Lara.h"
+#include "Engine/Rendering/Material.h"
+
 namespace TombForge
 {
-    static constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedVertexShader.glsl";
-
-    static constexpr char const* BaseFragmentShaderPath = "Shaders\\BaseFragmentShader.glsl";
-    static constexpr char const* BaseVertexShaderPath = "Shaders\\BaseVertexShader.glsl";
-
-    static constexpr char const* LineVertexShaderPath = "Shaders\\LineVertexShader.glsl";
-
-    static constexpr char const* ColorFragmentShaderPath = "Shaders\\ColorFragmentShader.glsl";
-
-    static constexpr char const* GizmoFragmentShaderPath = "Shaders\\GizmoFragmentShader.glsl";
-
-    static constexpr char const* DepthFragmentShaderPath = "Shaders\\DepthFragmentShader.glsl";
-    static constexpr char const* DepthVertexShaderPath = "Shaders\\DepthVertexShader.glsl";
+    namespace
+    {
+        constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedVertexShader.glsl";
+        constexpr char const* BaseFragmentShaderPath = "Shaders\\BaseFragmentShader.glsl";
+        constexpr char const* BaseVertexShaderPath = "Shaders\\BaseVertexShader.glsl";
+        constexpr char const* LineVertexShaderPath = "Shaders\\LineVertexShader.glsl";
+        constexpr char const* ColorFragmentShaderPath = "Shaders\\ColorFragmentShader.glsl";
+        constexpr char const* GizmoFragmentShaderPath = "Shaders\\GizmoFragmentShader.glsl";
+        constexpr char const* DepthFragmentShaderPath = "Shaders\\DepthFragmentShader.glsl";
+        constexpr char const* DepthVertexShaderPath = "Shaders\\DepthVertexShader.glsl";
+    }
 
     Renderer::Renderer()
         : m_graphics{ Graphics::Get() }
@@ -94,10 +92,13 @@ namespace TombForge
         }
     }
 
-    void Renderer::Render(const Level& level, const Lara& lara, const Camera& camera)
+    void Renderer::ClearFramebuffer()
     {
         m_graphics.ClearFrameBuffer();
+    }
 
+    void Renderer::RenderLevel(const Level& level, const Lara& lara, const Camera& camera)
+    {
         m_graphics.UseShader(m_skinnedShader.gpuHandle);
 
         m_viewMatrix = glm::inverse(camera.transform.AsMatrix());

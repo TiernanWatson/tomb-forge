@@ -1,6 +1,6 @@
 #pragma once
 
-#if DEVSLATE
+#if EDITOR_ENABLED
 
 #include <string>
 #include <cstdint>
@@ -36,6 +36,7 @@ namespace TombForge::Debug
 #define ASSERT(condition, message, ...) \
 if (!(condition)) { \
     LOG_ERROR(message, __VA_ARGS__); \
+    abort(); \
 }
 
 #else

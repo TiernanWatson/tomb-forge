@@ -1,6 +1,6 @@
 #pragma once
 
-#if DEVSLATE
+#if EDITOR_ENABLED
 
 #define WIN32_LEAN_AND_MEAN
 
@@ -8,6 +8,12 @@
 #include <shobjidl.h>
 #include <string>
 #include <vector>
+
+// These Win32 macros conflict with engine code elsewhere when included
+#undef near
+#undef far
+#undef min
+#undef max
 
 namespace TombForge
 {

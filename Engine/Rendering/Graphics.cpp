@@ -1,18 +1,16 @@
-#include "Graphics.h"
+#include "Engine/Rendering/Graphics.h"
 
 #include <stdexcept>
 
 #include <glad/glad.h>
 #include <glfw3.h>
 
-#include "../../Core/Debug.h"
-#include "../../Core/IO/FileIO.h"
-#include "../Core/Graphics/Shader.h"
-#include "../Core/Graphics/Color.h"
-#include "Model.h"
-#include "Texture.h"
-
-//#include <intrin.h>
+#include "Core/Debug.h"
+#include "Core/Graphics/Color.h"
+#include "Core/IO/FileIO.h"
+#include "Engine/Rendering/Model.h"
+#include "Engine/Rendering/Shader.h"
+#include "Engine/Rendering/Texture.h"
 
 namespace TombForge
 {
@@ -75,10 +73,10 @@ namespace TombForge
             throw std::runtime_error("Trying to initialize GLAD twice");
         }
 
-        if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+        /*if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
         {
             throw std::runtime_error("Failed to initialize GLAD");
-        }
+        }*/
 
         const std::string vertexSource = FileIO::ReadEntireFile(SkinnedVertexShaderPath);
         const std::string fragSource = FileIO::ReadEntireFile(BaseFragmentShaderPath);

@@ -1,8 +1,7 @@
-#include "ClimbState.h"#
+#include "Engine/Player/States/ClimbState.h"
 
-#include "../Input.h"
-#include "../Lara.h"
-#include "../../../Core/Maths/Maths.h"
+#include "Core/Maths/Maths.h"
+#include "Engine/Player/Input.h"
 
 namespace TombForge
 {

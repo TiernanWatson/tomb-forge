@@ -1,15 +1,15 @@
-#include "GmxImport.h"
-
-#include "../../Core/Debug.h"
-#include "../../Core/IO/FileIO.h"
-#include "../../Core/Maths/Maths.h"
-#include "../../Core/Graphics/Color.h"
-#include "../Rendering/Material.h"
-#include "../Rendering/Model.h"
-#include "../Rendering/Texture.h"
-#include "TextureImport.h"
+#include "Engine/Assets/GmxImport.h"
 
 #include <LevelExport.h>
+
+#include "Core/Debug.h"
+#include "Core/Graphics/Color.h"
+#include "Core/IO/FileIO.h"
+#include "Core/Maths/Maths.h"
+#include "Engine/Assets/TextureImport.h"
+#include "Engine/Rendering/Material.h"
+#include "Engine/Rendering/Model.h"
+#include "Engine/Rendering/Texture.h"
 
 namespace TombForge
 {

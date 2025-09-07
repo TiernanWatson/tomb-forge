@@ -1,11 +1,12 @@
 #pragma once
+
 #include <Jolt/Jolt.h>
 #include <Jolt/Renderer/DebugRendererSimple.h>
 #include <string_view>
 #include <vector>
 
-#include "../../Core/Graphics/Line.h"
-#include "../../Core/Maths/Transform.h"
+#include "Core/Graphics/Line.h"
+#include "Core/Maths/Transform.h"
 
 namespace TombForge
 {

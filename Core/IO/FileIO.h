@@ -6,6 +6,7 @@
 namespace TombForge::FileIO
 {
     static constexpr uint8_t TFFileMagic{ 'T' };
+    static constexpr char Separator{ '\\' };
 
     struct TFFileHeader
     {

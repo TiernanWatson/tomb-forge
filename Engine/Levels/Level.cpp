@@ -1,9 +1,9 @@
-#include "Level.h"
+#include "Engine/Levels/Level.h"
 
 #include <nlohmann/json.hpp>
 #include <fstream>
 
-#include "../Physics/Physics.h"
+#include "Engine/Physics/Physics.h"
 
 namespace TombForge
 {

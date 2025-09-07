@@ -1,8 +1,8 @@
 #pragma once
 
-#include "LaraState.h"
+#include <glm/glm.hpp>
 
-#include "glm/glm.hpp"
+#include "Engine/Player/States/LaraState.h"
 
 namespace TombForge
 {

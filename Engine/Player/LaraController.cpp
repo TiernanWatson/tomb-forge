@@ -1,8 +1,8 @@
-#include "LaraController.h"
+#include "Engine/Player/LaraController.h"
 
-#include "Lara.h"
-#include "../Physics/Physics.h"
-#include "../Physics/PhysicsInterface.h"
+#include "Engine/Physics/Physics.h"
+#include "Engine/Physics/PhysicsInterface.h"
+#include "Engine/Player/Lara.h"
 
 namespace TombForge
 {
@@ -13,7 +13,10 @@ namespace TombForge
 
     void LaraController::SetAnimation(LaraAnim id, float fadeTime, bool loop)
     {
-        ASSERT(m_lara->animations[id], "Null animation for Lara: %i", id);
+        if (!m_lara->animations[id])
+        {
+            return;
+        }
 
         if (fadeTime == 0.0f)
         {
@@ -55,6 +58,11 @@ namespace TombForge
     LaraAnim LaraController::CurrentAnim() const
     {
         return m_lara->animIndex;
+    }
+
+    const AnimPlayer& LaraController::GetAnimPlayer() const
+    {
+        return m_lara->animPlayer;
     }
 
     void LaraController::SetVelocity(const glm::vec3& velocity)

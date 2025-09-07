@@ -1,9 +1,9 @@
-#include "ProjectSettings.h"
+#include "Engine/ProjectSettings.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "../Core/Debug.h"
+#include "Core/Debug.h"
 
 namespace TombForge
 {
@@ -55,8 +55,8 @@ namespace TombForge
         {
             nlohmann::json json;
             json["name"] = name;
-            json["laraPath"] = laraPath;
-            json["defaultLevelPath"] = defaultLevelPath;
+            json["laraPath"] = IsValidAssetId(laraPath) ? laraPath : InvalidAssetId;
+            json["defaultLevelPath"] = IsValidAssetId(defaultLevelPath) ? defaultLevelPath : InvalidAssetId;
             out << json.dump(4);
             out.flush();
             out.close();

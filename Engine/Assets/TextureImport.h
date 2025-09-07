@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../Rendering/Texture.h"
+#include "Engine/Rendering/Texture.h"
 
 namespace TombForge
 {

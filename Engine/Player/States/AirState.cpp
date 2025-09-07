@@ -1,12 +1,11 @@
-#include "AirState.h"
+#include "Engine/Player/States/AirState.h"
 
 #include <glm/gtx/vector_angle.hpp>
 
-#include "../../Physics/PhysicsInterface.h"
-#include "../../Rendering/JoltDebugRenderer.h"
-#include "../Core/Debug.h"
-#include "../Input.h"
-#include "../Lara.h"
+#include "Core/Debug.h"
+#include "Engine/Physics/PhysicsInterface.h"
+#include "Engine/Player/Input.h"
+#include "Engine/Rendering/JoltDebugRenderer.h"
 
 namespace TombForge
 {

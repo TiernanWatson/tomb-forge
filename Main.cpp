@@ -1,16 +1,41 @@
 #include <iostream>
 
-#include "Engine.h"
+#include "Engine/Engine.h"
+
+#if EDITOR_ENABLED
+#include "Engine/Editor.h"
+#endif
 
 int main()
 {
-    std::cout << "TombForge v0.0.1" << std::endl;
+    using namespace TombForge;
 
-    TombForge::Engine engine;
+    EngineContext context{};
 
-    while (engine.Update()) {}
+    if (!InitEngine(context))
+    {
+        std::cerr << "Failed to initialize engine." << std::endl;
+        return -1;
+    }
 
-    std::cout << "TombForge terminated" << std::endl;
+#if EDITOR_ENABLED
+    Editor editor(context);
+#endif
+
+    bool shouldQuit = false;
+    while (!shouldQuit)
+    {
+        shouldQuit = !UpdateEngine(context);
+
+#if EDITOR_ENABLED
+        editor.Update();
+#endif
+
+        SwapBuffers(context);
+        PollEvents(context);
+    };
+
+    DestroyEngine(context);
 
     return 0;
 }

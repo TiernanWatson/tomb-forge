@@ -2,10 +2,10 @@
 
 #include <memory>
 
-#include "Skeleton.h"
-#include "Animation.h"
-#include "../../Core/Debug.h"
-#include "../../Core/Maths/Transform.h"
+#include "Core/Debug.h"
+#include "Core/Maths/Transform.h"
+#include "Engine/Animation/Animation.h"
+#include "Engine/Animation/Skeleton.h"
 
 namespace TombForge
 {
@@ -106,8 +106,7 @@ namespace TombForge
         inline bool IsValid() const
         {
             return m_skeleton != nullptr 
-                && m_currentAnim.animation != nullptr 
-                && m_currentAnim.animation->keys.size() == m_skeleton->bones.size();
+                && (m_currentAnim.animation == nullptr || m_currentAnim.animation->keys.size() == m_skeleton->bones.size());
         }
 
     private:

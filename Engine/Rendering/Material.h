@@ -7,8 +7,8 @@
 #include <vector>
 #include <string>
 
-#include "Texture.h"
-#include "Graphics.h"
+#include "Engine/Rendering/Texture.h"
+#include "Engine/Rendering/Graphics.h"
 
 namespace TombForge
 {

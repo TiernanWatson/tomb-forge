@@ -3,16 +3,16 @@
 #include <memory>
 #include <vector>
 
-#include "../../Core/Graphics/AABB.h"
-#include "../../Core/Graphics/Frustum.h"
-#include "../../Core/Graphics/Shader.h"
-#include "../../Core/Maths/Transform.h"
-#include "../Levels/Level.h"
-#include "Graphics.h"
-#include "Texture.h"
-
 #include <glm/detail/type_vec.hpp>
 #include <unordered_set>
+
+#include "Core/Graphics/AABB.h"
+#include "Core/Graphics/Frustum.h"
+#include "Core/Maths/Transform.h"
+#include "Engine/Levels/Level.h"
+#include "Engine/Rendering/Graphics.h"
+#include "Engine/Rendering/Shader.h"
+#include "Engine/Rendering/Texture.h"
 
 namespace TombForge
 {
@@ -64,14 +64,19 @@ namespace TombForge
     public:
         Renderer();
 
+        //bool Initialize(Graphics& graphics);
+
         // When a level is loaded, call this to set it up with the renderer
         bool InitializeLevel(Level& level);
 
         // This destroys all the GPU instances of the meshes when a level is unloaded
         void DeloadLevel(Level& level);
 
+        // To be called before rendering a frame
+        void ClearFramebuffer();
+
         // Called once per frame to render the level
-        void Render(const Level& level, const Lara& lara, const Camera& camera);
+        void RenderLevel(const Level& level, const Lara& lara, const Camera& camera);
 
         // Sets the camera view and projection matrices in the shader
         void SetCamera(const Transform& transform, float fovY, float aspect, float near, float far);
@@ -88,7 +93,7 @@ namespace TombForge
         // Renders a mesh as wireframe
         void RenderWireframe(const Mesh& model, const Transform& transform, const Camera& camera);
 
-#if DEVSLATE
+#if EDITOR_ENABLED
         void DrawOctree(const glm::vec4& color, const Camera& camera, uint32_t contains = UINT32_MAX);
 
         void DrawBox(const AABB& aabb, const glm::vec4& color, const Camera& camera);

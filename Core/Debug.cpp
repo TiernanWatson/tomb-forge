@@ -1,6 +1,6 @@
 #include "Debug.h"
 
-#if DEVSLATE
+#if EDITOR_ENABLED
 
 #include <vector>
 #include <cstdarg>

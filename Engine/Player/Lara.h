@@ -3,12 +3,13 @@
 #include <array>
 #include <memory>
 
-#include "../Rendering/Model.h"
-#include "../../Core/Maths/Transform.h"
-#include "../Animation/AnimMachine.h"
-#include "../Physics/Physics.h"
-#include "LaraEnums.h"
-#include "../Assets/AssetRegistry.h"
+#include "Core/Maths/Transform.h"
+#include "Engine/Animation/AnimMachine.h"
+#include "Engine/Assets/AssetRegistry.h"
+#include "Engine/Physics/Physics.h"
+#include "Engine/Player/LaraEnums.h"
+#include "Engine/Player/States/LaraState.h"
+#include "Engine/Rendering/Model.h"
 
 namespace TombForge
 {
@@ -34,12 +35,15 @@ namespace TombForge
 
         std::array<std::shared_ptr<Animation>, LARA_ANIM_COUNT> animations{}; // Indexed by anim id
 
+        std::vector<std::unique_ptr<LaraBaseState>> states{}; // NEW
+
         float cameraYaw{};
         float cameraPitch{};
         float health{}; // Current health 0.0 -> 1.0
 
         LaraAnim animIndex{};
         LaraWeapon weapon{};
+        uint32_t stateIndex{}; // NEW
 
         void LoadAnimations(AssetRegistry& loader);
 

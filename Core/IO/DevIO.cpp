@@ -1,6 +1,6 @@
-#if DEVSLATE
+#if EDITOR_ENABLED
 
-#include "DevIO.h"
+#include "Core/IO/DevIO.h"
 
 namespace TombForge
 {

@@ -5,6 +5,7 @@
 #include <memory>
 #include <functional>
 #include <unordered_map>
+#include <array>
 
 #include <glm/vec3.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -16,12 +17,13 @@
 #include <Jolt/Physics/Collision/Shape/MeshShape.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 
-#include "../../Core/Maths/Transform.h"
-#include "../Rendering/Model.h"
-#include "../Assets/AssetId.h"
+#include "Core/Maths/Transform.h"
+#include "Engine/Rendering/Model.h"
+#include "Engine/Assets/AssetId.h"
 
-#include <functional>
-#include <array>
+// These Win32 macros conflict with camera code
+#undef near
+#undef far
 
 struct GLFWwindow;
 

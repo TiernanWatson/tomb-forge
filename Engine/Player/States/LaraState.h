@@ -1,15 +1,19 @@
 #pragma once
 
-#include "../../Physics/PhysicsInterface.h"
-#include "../LaraController.h"
-#include "../LaraEnums.h"
+#include <glad/glad.h>
+#include <glfw3.h>
+
+#include "Engine/Physics/PhysicsInterface.h"
+#include "Engine/Player/LaraController.h"
+#include "Engine/Player/LaraEnums.h"
 
 namespace TombForge
 {
     class PhysicsInterface;
 
     /// <summary>
-    /// Allows encapsulation of state-specific variables and easier to read code
+    /// Allows encapsulation of state-specific variables and easier to read code.
+    /// Flow: PreAnimationUpdate -> UpdateAnimation -> PrePhysicsUpdate -> PostPhysicsUpdate.
     /// </summary>
     class LaraBaseState
     {

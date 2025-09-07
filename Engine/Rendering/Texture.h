@@ -3,8 +3,8 @@
 #include <cstdint>
 #include <vector>
 
-#include "../Assets/AssetId.h"
-#include "Graphics.h"
+#include "Engine/Assets/AssetId.h"
+#include "Engine/Rendering/Graphics.h"
 
 namespace TombForge
 {

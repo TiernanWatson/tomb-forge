@@ -1,6 +1,4 @@
-#include "Skeleton.h"
-
-#include <fstream>
+#include "Engine/Animation/Skeleton.h"
 
 namespace TombForge
 {

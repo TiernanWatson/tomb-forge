@@ -1,8 +1,7 @@
-#include "Frustum.h"
+#include "Core/Graphics/Frustum.h"
 
-#include "../Maths/Maths.h"
-
-#include "../Debug.h"
+#include "Core/Maths/Maths.h"
+#include "Core/Debug.h"
 
 namespace TombForge
 {

@@ -1,4 +1,4 @@
-#include "ModelImporter.h"
+#include "Engine/Assets/ModelImporter.h"
 
 #include <unordered_map>
 #include <unordered_set>
@@ -10,11 +10,11 @@
 
 #include <stb_image.h>
 
-#include "../../Core/Debug.h"
-#include "../../Core/IO/FileIO.h"
-#include "../../Engine/Assets/TextureImport.h"
-#include "../Rendering/Material.h"
-#include "../Rendering/Texture.h"
+#include "Core/Debug.h"
+#include "Core/IO/FileIO.h"
+#include "Engine/Assets/TextureImport.h"
+#include "Engine/Rendering/Material.h"
+#include "Engine/Rendering/Texture.h"
 
 namespace TombForge
 {
@@ -112,8 +112,7 @@ namespace TombForge
         const aiNode* node,
         const ImportSettings& settings,
         std::unordered_map<std::string, BoneInfo>& output,
-        glm::mat4 parentTransform = glm::mat4(1.0f)
-    )
+        glm::mat4 parentTransform = glm::mat4(1.0f))
     {
         glm::mat4 nodeTransform = ConvertAssimpMatrixToGlm(node->mTransformation);
         nodeTransform[3][0] *= settings.scale;
@@ -121,10 +120,6 @@ namespace TombForge
         nodeTransform[3][2] *= settings.scale;
 
         parentTransform = parentTransform * nodeTransform;
-
-        glm::vec3 euler = glm::eulerAngles(glm::quat_cast(nodeTransform)); // returns radians
-        float xDegrees = glm::degrees(euler.x);
-        LOG("Found node: %s with rotation %f and scale %f", node->mName.C_Str(), xDegrees, nodeTransform[0][0]);
 
         // todo: More robust method of finding root bone (they're not skinned so Assimp doesn't pick it up as a bone).
         // Will probably need to allow user to specify it. This also doesn't handle transforms above the root bone.
@@ -433,11 +428,9 @@ namespace TombForge
                 const uint8_t boneId = skeleton.FindBoneId(boneName);
                 if (boneId == 255)
                 {
-                    LOG_ERROR("Bone %s not found in skeleton %s", boneName.c_str(), skeleton.name.c_str());
+                    LOG_WARNING("Bone %s not found in skeleton %s", boneName.c_str(), skeleton.name.c_str());
                     continue;
                 }
-
-                LOG("Importing animation for bone %s with p %i r %i s %i", boneName.c_str(), node->mNumPositionKeys, node->mNumRotationKeys, node->mNumScalingKeys);
 
                 BoneKeys& keys = result.keys[boneId];
                 keys.positions.reserve(node->mNumPositionKeys);

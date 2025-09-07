@@ -7,7 +7,7 @@
 #include <glad/glad.h>
 #include <glm/detail/type_mat.hpp>
 
-#include "../../Core/Graphics/Line.h"
+#include "Core/Graphics/Line.h"
 
 namespace TombForge
 {

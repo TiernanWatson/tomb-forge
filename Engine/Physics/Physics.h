@@ -18,7 +18,7 @@
 #include <glm/vec3.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "../../Core/Maths/Transform.h"
+#include "Core/Maths/Transform.h"
 
 namespace TombForge
 {

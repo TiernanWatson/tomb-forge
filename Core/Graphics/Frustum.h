@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Plane.h"
-#include "AABB.h"
+#include "Core/Graphics/Plane.h"
+#include "Core/Graphics/AABB.h"
 
 namespace TombForge
 {

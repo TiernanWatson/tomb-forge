@@ -1,7 +1,7 @@
 #pragma once
 
-#include "../Animation/AnimPlayer.h"
-#include "LaraEnums.h"
+#include "Engine/Animation/AnimPlayer.h"
+#include "Engine/Player/LaraEnums.h"
 
 namespace TombForge
 {
@@ -34,6 +34,8 @@ namespace TombForge
         glm::quat RootRotDelta() const;
 
         LaraAnim CurrentAnim() const;
+
+        const AnimPlayer& GetAnimPlayer() const;
 
         // Movement
 

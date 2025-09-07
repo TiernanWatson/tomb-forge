@@ -1,12 +1,12 @@
-#include "AnimPlayer.h"
+#include "Engine/Animation/AnimPlayer.h"
 
 #include <cmath>
-#include <glm/gtx/quaternion.hpp>
-#include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/matrix_decompose.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/mat4x4.hpp>
 
-#include "../../Core/Debug.h"
+#include "Core/Debug.h"
 
 namespace TombForge
 {
@@ -45,7 +45,7 @@ namespace TombForge
 
     void AnimPlayer::Process(float deltaTime)
     {
-        if (!IsValid())
+        if (!IsValid() || !m_currentAnim.animation)
         {
             return;
         }

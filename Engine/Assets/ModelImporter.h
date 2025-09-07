@@ -3,9 +3,9 @@
 #include <memory>
 #include <string>
 
-#include "../Animation/Animation.h"
-#include "../Animation/Skeleton.h"
-#include "../Rendering/Model.h"
+#include "Engine/Animation/Animation.h"
+#include "Engine/Animation/Skeleton.h"
+#include "Engine/Rendering/Model.h"
 
 namespace TombForge
 {

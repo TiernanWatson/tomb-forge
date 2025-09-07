@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-#include "../../Engine/Animation/Skeleton.h"
-#include "../../Core/Graphics/AABB.h"
-#include "Graphics.h"
+#include "Core/Graphics/AABB.h"
+#include "Engine/Animation/Skeleton.h"
+#include "Engine/Rendering/Graphics.h"
 
 namespace TombForge
 {

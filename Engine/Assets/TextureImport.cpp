@@ -1,10 +1,11 @@
 #pragma once
 
-#include "TextureImport.h"
 #include <cstdint>
 #include <stb_image.h>
 #include <tiff.h>
 #include <tiffio.h>
+
+#include "Engine/Assets/TextureImport.h"
 
 namespace TombForge
 {

@@ -1,4 +1,4 @@
-#include "Config.h"
+#include "Core/Config.h"
 
 namespace TombForge
 {

@@ -109,11 +109,12 @@
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_DEBUG_RENDERER;JPH_PROFILE_ENABLED;JPH_OBJECT_STREAM;JPH_USE_AVX2;JPH_USE_AVX;JPH_USE_SSE4_1;JPH_USE_SSE4_2;JPH_USE_LZCNT;JPH_USE_TZCNT;JPH_USE_F16C;JPH_USE_FMADD;DEVSLATE;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>JPH_FLOATING_POINT_EXCEPTIONS_ENABLED;JPH_DEBUG_RENDERER;JPH_PROFILE_ENABLED;JPH_OBJECT_STREAM;JPH_USE_AVX2;JPH_USE_AVX;JPH_USE_SSE4_1;JPH_USE_SSE4_2;JPH_USE_LZCNT;JPH_USE_TZCNT;JPH_USE_F16C;JPH_USE_FMADD;DEVSLATE;EDITOR_ENABLED;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
       <UndefinePreprocessorDefinitions>USE_STATIC_MSVC_RUNTIME_LIBRARY</UndefinePreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -144,22 +145,22 @@
     <ClCompile Include="Core\Debug.cpp" />
     <ClCompile Include="Core\Graphics\AABB.cpp" />
     <ClCompile Include="Core\Graphics\Frustum.cpp" />
+    <ClCompile Include="Engine\Assets\AssetId.cpp" />
+    <ClCompile Include="Engine\Editor.cpp" />
+    <ClCompile Include="Engine\Engine.cpp" />
     <ClCompile Include="Engine\Rendering\Material.cpp" />
     <ClCompile Include="Engine\Rendering\Model.cpp" />
     <ClCompile Include="Engine\Rendering\Graphics.cpp" />
     <ClCompile Include="Core\Graphics\Plane.cpp" />
     <ClCompile Include="Engine\ProjectSettings.cpp" />
-    <ClCompile Include="Core\Window.cpp" />
     <ClCompile Include="Engine\Animation\AnimMachine.cpp" />
     <ClCompile Include="Engine\Assets\AssetRegistry.cpp" />
     <ClCompile Include="Engine\Assets\GmxImport.cpp" />
     <ClCompile Include="Engine\Assets\ModelImporter.cpp" />
-    <ClCompile Include="Engine\Rendering\Texture.cpp" />
     <ClCompile Include="Core\IO\DevIO.cpp" />
     <ClCompile Include="Core\IO\FileIO.cpp" />
-    <ClCompile Include="Core\Maths\Maths.cpp" />
     <ClCompile Include="Core\Maths\Transform.cpp" />
-    <ClCompile Include="Engine.cpp" />
+    <ClCompile Include="Engine_old.cpp" />
     <ClCompile Include="Engine\Animation\Animation.cpp" />
     <ClCompile Include="Engine\Animation\AnimPlayer.cpp" />
     <ClCompile Include="Engine\Animation\Skeleton.cpp" />
@@ -167,18 +168,14 @@
     <ClCompile Include="Engine\Levels\Level.cpp" />
     <ClCompile Include="Engine\Physics\Physics.cpp" />
     <ClCompile Include="Engine\Physics\PhysicsInterface.cpp" />
-    <ClCompile Include="Engine\Physics\PlayerFilters.cpp" />
     <ClCompile Include="Engine\Player\Input.cpp" />
     <ClCompile Include="Engine\Player\Lara.cpp" />
     <ClCompile Include="Engine\Player\LaraController.cpp" />
-    <ClCompile Include="Engine\Player\LaraEnums.cpp" />
     <ClCompile Include="Engine\Player\States\AirState.cpp" />
     <ClCompile Include="Engine\Player\States\ClimbState.cpp" />
-    <ClCompile Include="Engine\Player\States\LaraState.cpp" />
     <ClCompile Include="Engine\Player\States\LocomotionState.cpp" />
     <ClCompile Include="Engine\Rendering\JoltDebugRenderer.cpp" />
     <ClCompile Include="Engine\Rendering\Renderer.cpp" />
-    <ClCompile Include="Engine\State.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="stbi_impl.cpp" />
@@ -196,16 +193,18 @@
     <ClInclude Include="Core\Debug.h" />
     <ClInclude Include="Core\Graphics\AABB.h" />
     <ClInclude Include="Core\Graphics\Color.h" />
-    <ClInclude Include="Core\Graphics\Cubemap.h" />
     <ClInclude Include="Core\Graphics\Frustum.h" />
     <ClInclude Include="Core\Graphics\Line.h" />
+    <ClInclude Include="Core\IO\BinaryReader.h" />
+    <ClInclude Include="Core\IO\BinaryWriter.h" />
+    <ClInclude Include="Engine\Editor.h" />
+    <ClInclude Include="Engine\Engine.h" />
     <ClInclude Include="Engine\Rendering\Material.h" />
     <ClInclude Include="Engine\Rendering\Model.h" />
     <ClInclude Include="Engine\Rendering\Graphics.h" />
     <ClInclude Include="Core\Graphics\Plane.h" />
-    <ClInclude Include="Core\Graphics\Shader.h" />
+    <ClInclude Include="Engine\Rendering\Shader.h" />
     <ClInclude Include="Engine\ProjectSettings.h" />
-    <ClInclude Include="Core\Window.h" />
     <ClInclude Include="Engine\Animation\AnimMachine.h" />
     <ClInclude Include="Engine\Assets\AssetId.h" />
     <ClInclude Include="Engine\Assets\AssetRegistry.h" />
@@ -216,7 +215,7 @@
     <ClInclude Include="Core\IO\FileIO.h" />
     <ClInclude Include="Core\Maths\Maths.h" />
     <ClInclude Include="Core\Maths\Transform.h" />
-    <ClInclude Include="Engine.h" />
+    <ClInclude Include="Engine_old.h" />
     <ClInclude Include="Engine\Animation\Animation.h" />
     <ClInclude Include="Engine\Animation\AnimPlayer.h" />
     <ClInclude Include="Engine\Animation\Skeleton.h" />
@@ -235,7 +234,6 @@
     <ClInclude Include="Engine\Player\States\LocomotionState.h" />
     <ClInclude Include="Engine\Rendering\JoltDebugRenderer.h" />
     <ClInclude Include="Engine\Rendering\Renderer.h" />
-    <ClInclude Include="Engine\State.h" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_glfw.h" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_opengl3.h" />
     <ClInclude Include="ThirdParty\imgui\backends\imgui_impl_opengl3_loader.h" />

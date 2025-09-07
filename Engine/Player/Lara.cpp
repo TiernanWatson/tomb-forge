@@ -1,16 +1,15 @@
-#include "Lara.h"
+#include "Engine/Player/Lara.h"
 
-#include "States/LocomotionState.h"
-#include "States/AirState.h"
-#include "States/ClimbState.h"
+#include "Engine/Player/States/LocomotionState.h"
+#include "Engine/Player/States/AirState.h"
+#include "Engine/Player/States/ClimbState.h"
 
 namespace TombForge
 {
     void Lara::LoadAnimations(AssetRegistry& loader)
     {
         // Locomotion
-        //animations[LARA_ANIM_IDLE] = loader.Load("Lara\\Anims\\LARA_STANCE.tfanim");
-        animations[LARA_ANIM_IDLE] = loader.Load<Animation>("AnniLara3\\Anims\\AnniLara_StandHot.tfanim");
+        animations[LARA_ANIM_IDLE] = loader.Load<Animation>("Lara\\Anims\\LARA_STANCE.tfanim");
         animations[LARA_ANIM_RUN] = loader.Load<Animation>("Lara\\Anims\\LARA_RUN.tfanim");
         animations[LARA_ANIM_RUN_START] = loader.Load<Animation>("Lara\\Anims\\LARA_STANCE_TO_RUN.tfanim");
         animations[LARA_ANIM_RUN_TO_JUMP_L] = loader.Load<Animation>("Lara\\Anims\\LARA_RUN_TO_RUNJUMP.tfanim");

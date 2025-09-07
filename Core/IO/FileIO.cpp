@@ -1,10 +1,10 @@
-#include "FileIO.h"
+#include "Core/IO/FileIO.h"
 
 #include <fstream>
 #include <sstream>
 #include <filesystem>
 
-#include "../Debug.h"
+#include "Core/Debug.h"
 
 namespace TombForge
 {
@@ -137,7 +137,8 @@ namespace TombForge
     std::string FileIO::GetRelativePath(const std::string& filePath, const std::string& basePath)
     {
         ASSERT(basePath.size() < filePath.size(), "%s is not larger than %s", filePath.c_str(), basePath.c_str());
-        return filePath.substr(basePath.size());
+        bool hasSlash = basePath.back() == '/' || basePath.back() == '\\';
+        return filePath.substr(basePath.size() + (hasSlash ? 0 : 1));
     }
 
     std::string FileIO::GetDirectory(const std::string& filePath)

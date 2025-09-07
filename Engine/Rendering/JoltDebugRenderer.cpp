@@ -1,9 +1,9 @@
-#include "JoltDebugRenderer.h"
-
-#include "Graphics.h"
+#include "Engine/Rendering/JoltDebugRenderer.h"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/transform.hpp>
+
+#include "Engine/Rendering/Graphics.h"
 
 namespace TombForge
 {

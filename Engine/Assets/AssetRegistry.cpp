@@ -1,15 +1,15 @@
-#include "AssetRegistry.h"
+#include "Engine/Assets/AssetRegistry.h"
 
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-#include "../../Core/IO/FileIO.h"
-#include "../Rendering/Model.h"
-#include "../Rendering/Material.h"
-#include "../Rendering/Texture.h"
-#include "../Animation/Skeleton.h"
-#include "../Animation/Animation.h"
-#include "../Levels/Level.h"
+#include "Core/IO/FileIO.h"
+#include "Engine/Animation/Animation.h"
+#include "Engine/Animation/Skeleton.h"
+#include "Engine/Levels/Level.h"
+#include "Engine/Rendering/Material.h"
+#include "Engine/Rendering/Model.h"
+#include "Engine/Rendering/Texture.h"
 
 namespace TombForge
 {
@@ -38,7 +38,7 @@ namespace TombForge
             nlohmann::json json = nlohmann::json::parse(inFile);
             for (const auto& item : json["assets"])
             {
-                if (!item.contains("id") || !item.contains("name") || !item.contains("assetPath") || !item.contains("type"))
+                if (!item.contains("id") || !item.contains("assetPath") || !item.contains("type"))
                 {
                     LOG_WARNING("Malformed asset registry entry, skipping. Saving the registry will remove this entry!");
                     continue;
@@ -50,6 +50,11 @@ namespace TombForge
                 meta.assetPath = item["assetPath"].get<std::string>();
                 meta.type = static_cast<AssetType>(item["type"].get<uint8_t>());
                 m_assets.emplace(std::make_pair(meta.id, meta));
+
+                if (meta.id >= m_nextId)
+                {
+                    m_nextId = meta.id + 1;
+                }
             }
             inFile.close();
         }
@@ -59,18 +64,70 @@ namespace TombForge
         }
     }
 
-    void AssetRegistry::Save() const
+    void AssetRegistry::Save()
     {
         std::ofstream outFile(m_registryPath);
         if (outFile.is_open())
         {
             nlohmann::json json{};
             json["assets"] = nlohmann::json::array();
-            for (const auto& [id, meta] : m_assets)
+            for (auto& [id, meta] : m_assets)
             {
                 if (!IsValidAssetId(id) || meta.isBuiltin)
                 {
                     continue;
+                }
+
+                switch (meta.type)
+                {
+                case ASSET_TYPE_MODEL:
+                {
+                    if (!SaveAssetIfDirty<Model>(id, meta))
+                    {
+                        continue;
+                    }
+                    break;
+                }
+                case ASSET_TYPE_TEXTURE:
+                {
+                    if (!SaveAssetIfDirty<Texture>(id, meta))
+                    {
+                        continue;
+                    }
+                    break;
+                }
+                case ASSET_TYPE_MATERIAL:
+                {
+                    if (!SaveAssetIfDirty<Material>(id, meta))
+                    {
+                        continue;
+                    }
+                    break;
+                }
+                case ASSET_TYPE_ANIMATION:
+                {
+                    if (!SaveAssetIfDirty<Animation>(id, meta))
+                    {
+                        continue;
+                    }
+                    break;
+                }
+                case ASSET_TYPE_SKELETON:
+                {
+                    if (!SaveAssetIfDirty<Skeleton>(id, meta))
+                    {
+                        continue;
+                    }
+                    break;
+                }
+                case ASSET_TYPE_LEVEL:
+                {
+                    if (!SaveAssetIfDirty<Level>(id, meta))
+                    {
+                        continue;
+                    }
+                    break;
+                }
                 }
 
                 nlohmann::json item{};
@@ -92,15 +149,22 @@ namespace TombForge
 
     AssetId AssetRegistry::GetAssetId(const std::string& path) const
     {
+        const std::string finalPath = FileIO::IsAbsolutePath(path) ? FileIO::GetRelativePath(path, m_basePath) : path;
+
         for (const auto& [id, meta] : m_assets)
         {
-            if (meta.assetPath == path)
+            if (meta.assetPath == finalPath)
             {
                 return id;
             }
         }
 
         return InvalidAssetId;
+    }
+
+    bool AssetRegistry::IsDirty() const
+    {
+        throw std::exception("Need to implement");
     }
 
     std::string AssetRegistry::GetAbsolutePath(const std::string& path) const
@@ -612,5 +676,43 @@ namespace TombForge
 
         outFile.flush();
         outFile.close();
+    }
+
+    template<typename T>
+    bool AssetRegistry::SaveAssetIfDirty(const AssetId id, AssetMeta& meta)
+    {
+        auto& map = AssetTraits<T>::GetMap(*this);
+        auto it = map.find(id);
+        if (it != map.end() && it->second)
+        {
+            const bool isDirty = it->second->isDirty;
+            if (isDirty)
+            {
+                const std::string& name = it->second->name;
+                const std::string oldPath = GetAbsolutePath(meta.assetPath);
+
+                if (name.empty() || FileIO::IsAbsolutePath(name))
+                {
+                    LOG_ERROR("Tried to save dirty asset with empty or absolute path: %s", name.c_str());
+                    return false;
+                }
+
+                const bool renamed = meta.assetPath != name;
+                meta.assetPath = name;
+
+                WriteAsset<T>(*it->second, meta);
+                it->second->isDirty = false;
+
+                if (renamed && FileIO::FileExists(GetAbsolutePath(name)))
+                {
+                    if (FileIO::FileExists(oldPath))
+                    {
+                        FileIO::DeleteFile(oldPath);
+                    }
+                }
+            }
+
+            return true;
+        }
     }
 }

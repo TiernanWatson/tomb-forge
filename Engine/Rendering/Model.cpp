@@ -1,8 +1,8 @@
-#include "Model.h"
+#include "Engine/Rendering/Model.h"
 
 #include <fstream>
 
-#include "Material.h"
+#include "Engine/Rendering/Material.h"
 
 namespace TombForge
 {
