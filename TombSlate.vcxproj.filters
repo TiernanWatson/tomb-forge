@@ -153,9 +153,6 @@
     <ClCompile Include="Engine\Audio\AudioSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Events\EventBus.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Engine\Physics\Physics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
