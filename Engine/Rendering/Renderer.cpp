@@ -42,7 +42,7 @@ namespace TombForge
                 continue;
             }
 
-            auto& mesh = *obj.mesh;
+            auto& mesh = level.models[obj.model]->meshes[obj.mesh];
 
             if (!mesh.gpuHandle.IsValid())
             {
@@ -75,16 +75,18 @@ namespace TombForge
 
     void Renderer::DeloadLevel(Level& level)
     {
-        for (auto& mesh : level.meshes)
+        for (auto& meshInfo : level.meshes)
         {
-            if (mesh.mesh->gpuHandle.IsValid())
+            auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
+
+            if (mesh.gpuHandle.IsValid())
             {
-                m_graphics.DestroyMeshInstance(mesh.mesh->gpuHandle);
+                m_graphics.DestroyMeshInstance(mesh.gpuHandle);
             }
 
-            if (mesh.mesh->material && mesh.mesh->material->diffuse)
+            if (mesh.material && mesh.material->diffuse)
             {
-                if (mesh.mesh->material->diffuse->gpuHandle.IsValid())
+                if (mesh.material->diffuse->gpuHandle.IsValid())
                 {
                     //mesh.mesh->material->diffuse->gpuHandle = m_graphics.DestroyTextureInstance(*mesh.material->diffuse);
                 }
@@ -132,12 +134,12 @@ namespace TombForge
     {
         if (lara.model)
         {
-            MeshLightArray laraLights{};
-            GetClosestLights(level, lara.transform.position, laraLights);
+            MeshLightArray lightIndices{};
+            GetClosestLights(level, lara.transform.position, lightIndices);
 
-            Transform laraFinalTransform = lara.transform;
-            laraFinalTransform.rotation = lara.transform.rotation * glm::quat(lara.modelRotationOffset);
-            DrawModel(*lara.model.get(), laraFinalTransform, laraLights, false, &lara.animPlayer.FinalBoneMatrices());
+            Transform finalTransform = lara.transform;
+            finalTransform.rotation *= glm::quat(lara.modelRotationOffset);
+            DrawModel(*lara.model.get(), finalTransform, lightIndices, false, &lara.animPlayer.FinalBoneMatrices());
         }
     }
 
@@ -411,17 +413,15 @@ namespace TombForge
             for (uint32_t item : node.contains)
             {
                 const MeshInstance& obj = level.meshes[item];
+                auto& mesh = level.models[obj.model]->meshes[obj.mesh];
 
-                if (obj.mesh)
+                if (mesh.material && mesh.material->TestFlag(MATERIAL_FLAG_TRANSPARENT))
                 {
-                    if (obj.mesh->material && obj.mesh->material->TestFlag(MATERIAL_FLAG_TRANSPARENT))
-                    {
-                        transparent.emplace_back(item);
-                    }
-                    else
-                    {
-                        opaque.emplace_back(item);
-                    }
+                    transparent.emplace_back(item);
+                }
+                else
+                {
+                    opaque.emplace_back(item);
                 }
             }
 
@@ -441,14 +441,18 @@ namespace TombForge
     {
         for (uint32_t objIndex : opaque)
         {
+            auto& meshInfo = level.meshes[objIndex];
+            auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
             m_graphics.SetMatrix4(m_skinnedLocations.modelMatrix, level.meshes[objIndex].modelMatrix);
-            DrawMesh(*level.meshes[objIndex].mesh, level.meshes[objIndex].lights);
+            DrawMesh(mesh, level.meshes[objIndex].lights);
         }
 
         for (uint32_t objIndex : transparent)
         {
+            auto& meshInfo = level.meshes[objIndex];
+            auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
             m_graphics.SetMatrix4(m_skinnedLocations.modelMatrix, level.meshes[objIndex].modelMatrix);
-            DrawMesh(*level.meshes[objIndex].mesh, level.meshes[objIndex].lights);
+            DrawMesh(mesh, level.meshes[objIndex].lights);
         }
     }
 

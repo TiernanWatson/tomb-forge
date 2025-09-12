@@ -7,12 +7,16 @@
 #include <limits>
 #include <misc/cpp/imgui_stdlib.h>
 
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+
 #include "Core/Graphics/Color.h"
 #include "Core/IO/DevIO.h"
 #include "Core/IO/FileIO.h"
 #include "Core/Maths/Maths.h"
 #include "Engine/Animation/Animation.h"
 #include "Engine/Animation/Skeleton.h"
+#include "Engine/Audio/Sound.h"
 #include "Engine/Assets/GmxImport.h"
 #include "Engine/Assets/ModelImporter.h"
 #include "Engine/Assets/TextureImport.h"
@@ -45,7 +49,7 @@ namespace TombForge
 
         constexpr COMDLG_FILTERSPEC TombSlateFileTypes[] =
         {
-            { L"TombForge Asset", L"*.tombs;*.tfskel;*.tfanim;*.tfmod;*.tftex;*.tfmat;*.tflev;*.tfproj" }
+            { L"TombForge Asset", L"*.tombs;*.tfskel;*.tfanim;*.tfmod;*.tftex;*.tfmat;*.tflev;*.tfproj;*.wav;*.ogg" }
         };
 
         constexpr COMDLG_FILTERSPEC ModelFileTypes[] =
@@ -61,6 +65,11 @@ namespace TombForge
         constexpr COMDLG_FILTERSPEC TextureFileTypes[] =
         {
             { L"Supported Texture Types", L"*.jpg;*.jpeg;*.tga;*.png;*.bmp;*.tif" }
+        };
+
+        constexpr COMDLG_FILTERSPEC SoundFileTypes[] =
+        {
+            { L"Supported Sound Types", L"*.wav;*.ogg" }
         };
 
         void PrintDebugMessage(const Debug::DbgMessage& message)
@@ -235,7 +244,7 @@ namespace TombForge
 
             for (auto& obj : m_ctx.level->boxColliders)
             {
-                JPH::BodyInterface& bodies = m_ctx.physicsSystem->GetBodyInterface();
+                JPH::BodyInterface& bodies = m_ctx.physics.system->GetBodyInterface();
                 JPH::ShapeRefC shape = bodies.GetShape(obj.rigidbody);
                 if (shape)
                 {
@@ -245,7 +254,7 @@ namespace TombForge
 
             for (auto& obj : m_ctx.level->meshColliders)
             {
-                JPH::BodyInterface& bodies = m_ctx.physicsSystem->GetBodyInterface();
+                JPH::BodyInterface& bodies = m_ctx.physics.system->GetBodyInterface();
                 JPH::ShapeRefC shape = bodies.GetShape(obj.rigidbody);
                 if (shape)
                 {
@@ -268,7 +277,8 @@ namespace TombForge
             if (m_ctx.level->meshes.size() > 0 && m_selectedMesh < m_ctx.level->meshes.size())
             {
                 auto& obj = m_ctx.level->meshes[m_selectedMesh];
-                m_ctx.renderer->RenderWireframe(*obj.mesh, obj.transform, m_ctx.camera);
+                auto& mesh = m_ctx.level->models[obj.model]->meshes[obj.mesh];
+                m_ctx.renderer->RenderWireframe(mesh, obj.transform, m_ctx.camera);
             }
         }
 
@@ -437,14 +447,17 @@ namespace TombForge
 
                         for (auto& model : result.geometry)
                         {
-                            for (auto& mesh : model->meshes)
+                            m_ctx.level->models.emplace_back(model);
+
+                            for (size_t m = 0; m < model->meshes.size(); m++)
                             {
                                 auto& instance = m_ctx.level->meshes.emplace_back();
-                                instance.mesh = &mesh;
-                                instance.bounds = mesh.bounds;
+                                instance.model = static_cast<uint32_t>(m_ctx.level->models.size() - 1);
+                                instance.mesh = m;
+                                instance.bounds = model->meshes[m].bounds;
                                 instance.modelMatrix = instance.transform.AsMatrix();
 
-                                const glm::vec3 lightReferencePosition = (mesh.bounds.min + mesh.bounds.max) / 2.0f;
+                                const glm::vec3 lightReferencePosition = (instance.bounds.min + instance.bounds.max) / 2.0f;
                                 GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights);
                             }
                         }
@@ -474,8 +487,43 @@ namespace TombForge
                                     {
                                         const std::string absPath = outPath + "\\" + FileIO::GetFileName(*it) + TextureFileExt;
                                         m_ctx.assetRegistry.AddAsset<Texture>(texture, absPath, *it);
+                                        m_ctx.assetRegistry.Save();
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+                if (ImGui::MenuItem("Import Sound"))
+                {
+                    std::vector<std::string> importPaths{};
+                    if (OpenMultiFileDialog(SoundFileTypes, 1, importPaths))
+                    {
+                        const std::string& outFolder = OpenFileDialog({}, 0, true);
+                        if (!outFolder.empty())
+                        {
+                            for (auto it = importPaths.begin(); it != importPaths.end(); it++)
+                            {
+                                if (it->empty())
+                                {
+                                    continue;
+                                }
+
+                                if (!FileIO::IsExtension(*it, ".wav") && !FileIO::IsExtension(*it, ".ogg"))
+                                {
+                                    LOG_ERROR("Unsupported sound format: %s. Use OGG/Wav.", it->c_str());
+                                    continue;
+                                }
+
+                                const std::string& outFile = outFolder + FileIO::Separator + FileIO::GetFileName(*it, true);
+                                FileIO::CopyFile(*it, outFile);
+
+                                std::shared_ptr<Sound> sound = std::make_shared<Sound>();
+                                m_ctx.assetRegistry.AddAsset<Sound>(sound, outFile, *it);
+                                m_ctx.assetRegistry.Save();
+
+                                // AssetRegistry loads the data, not us beforehand
+                                sound = m_ctx.assetRegistry.Load<Sound>(outFile);
                             }
                         }
                     }
@@ -524,13 +572,15 @@ namespace TombForge
                             {
                                 m_ctx.level->models.emplace_back(model);
 
-                                for (auto& mesh : model->meshes)
+                                for (size_t i = 0; i < model->meshes.size(); i++)
                                 {
                                     auto& instance = m_ctx.level->meshes.emplace_back();
-                                    instance.mesh = &mesh;
-                                    instance.bounds = mesh.bounds;
+                                    instance.model = m_ctx.level->models.size() - 1;
+                                    instance.mesh = static_cast<uint32_t>(i);
+                                    instance.bounds = model->meshes[i].bounds;
                                     instance.modelMatrix = instance.transform.AsMatrix();
-                                    const glm::vec3 lightReferencePosition = (mesh.bounds.min + mesh.bounds.max) / 2.0f;
+                                    instance.transform = instance.transform;
+                                    const glm::vec3 lightReferencePosition = (instance.bounds.min + instance.bounds.max) / 2.0f;
                                     GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights);
                                 }
 
@@ -549,9 +599,10 @@ namespace TombForge
 
                         auto& obj = m_ctx.level->meshes.emplace_back();
                         obj.name = "Cube";
-                        obj.mesh = &cubeModel->meshes[0];
+                        obj.model = m_ctx.level->models.size() - 1;
+                        obj.mesh = 0;
 
-                        UpdateBounds(obj);
+                        UpdateBounds(*m_ctx.level, obj);
 
                         m_ctx.renderer->InitializeLevel(*m_ctx.level);
                     }
@@ -566,6 +617,11 @@ namespace TombForge
             if (ImGui::MenuItem("Lara Settings"))
             {
                 m_showLaraWindow = true;
+            }
+
+            if (ImGui::MenuItem("Level Settings"))
+            {
+                m_showLevelWindow = true;
             }
         }
 
@@ -601,6 +657,11 @@ namespace TombForge
         if (m_showModelWindow)
         {
             DrawModelWindow();
+        }
+
+        if (m_showLevelWindow)
+        {
+            DrawLevelWindow();
         }
 
         // Inspector
@@ -847,7 +908,8 @@ namespace TombForge
                         ImGui::PushID(i);
                         auto& staticObj = m_ctx.level->meshes[i];
                         bool selected = i == selectedObject;
-                        const char* name = staticObj.mesh->name.size() > 0 ? staticObj.mesh->name.c_str() : "#UNNAMED!";
+                        auto& mesh = m_ctx.level->models[staticObj.model]->meshes[staticObj.mesh];
+                        const char* name = staticObj.name.size() > 0 ? staticObj.name.c_str() : "#UNNAMED!";
                         if (ImGui::Selectable(name, &selected))
                         {
                             if (selectedObject == i)
@@ -883,10 +945,11 @@ namespace TombForge
                         OnObjectTransformUpdate(selectedObject);
                     }
                     ImGui::SeparatorText("Mesh");
-                    ImGui::Text("Mesh: %s", obj.mesh ? obj.mesh->name.c_str() : "Null");
+                    auto& mesh = m_ctx.level->models[obj.model]->meshes[obj.mesh];
+                    ImGui::Text("Mesh: %s", mesh.name.c_str());
                     if (obj.mesh)
                     {
-                        ImGui::Text("Material Name: %s", obj.mesh->name.c_str());
+                        ImGui::Text("Material Name: %s", mesh.material->name.c_str());
                     }
                     ImGui::SeparatorText("Lights");
                     ImGui::Text("%i, %i, %i, %i, %i, %i, %i, %i",
@@ -1300,6 +1363,9 @@ namespace TombForge
             case ASSET_TYPE_LEVEL:
                 typeStr = "Level";
                 break;
+            case ASSET_TYPE_SOUND:
+                typeStr = "Sound";
+                break;
             default:
                 break;
             }
@@ -1327,6 +1393,57 @@ namespace TombForge
             m_showRegistryWindow = false;
         }
 
+        ImGui::End();
+    }
+
+    void Editor::DrawLevelWindow()
+    {
+        ImGui::SetNextWindowSizeConstraints({ 300, 300 }, { 600, 800 });
+        ImGui::Begin("Level Settings", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+
+        if (!m_ctx.level)
+        {
+            ImGui::Text("No level loaded");
+            ImGui::End();
+            return;
+        }
+
+        ImGui::InputText("Name", &m_ctx.level->name);
+        if (ImGui::Button("Set as Default Level"))
+        {
+            m_project.defaultLevelPath = m_ctx.assetRegistry.GetAssetId(m_ctx.level->GetFileName());
+        }
+        if (IsValidAssetId(m_project.defaultLevelPath))
+        {
+            ImGui::Text("Current Default: %s", m_ctx.level->name.c_str());
+        }
+        else
+        {
+            ImGui::Text("No Default Level Set");
+        }
+
+        ImGui::SeparatorText("Audio");
+        ImGui::Text("Ambient Sound: %s", m_ctx.level->ambientSound ? m_ctx.level->ambientSound->name.c_str() : "Empty");
+        ImGui::InputFloat("Ambient Volume", &m_ctx.level->ambientSoundVolume, 0.01f, 0.1f, "%.2f");
+        if (ImGui::Button("Set Ambient Sound"))
+        {
+            const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+            if (!filePath.empty())
+            {
+                m_ctx.level->ambientSound = m_ctx.assetRegistry.Load<Sound>(filePath);
+                m_ctx.level->isDirty = true;
+            }
+        }
+
+        if (ImGui::Button("Save Level"))
+        {
+            m_ctx.assetRegistry.SaveAsset(m_ctx.level);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close"))
+        {
+            m_showLevelWindow = false;
+        }
         ImGui::End();
     }
 
@@ -1423,7 +1540,7 @@ namespace TombForge
 
         auto& obj = m_ctx.level->meshes[index];
         obj.modelMatrix = obj.transform.AsMatrix();
-        UpdateBounds(obj);
+        UpdateBounds(*m_ctx.level, obj);
 
         if (m_ctx.level)
         {
@@ -1453,6 +1570,17 @@ namespace TombForge
                 m_ctx.isPaused = isEditor;
                 m_ctx.isFreeCamera = isEditor;
                 m_isEditMode = isEditor;
+                if (!m_isEditMode)
+                {
+                    if (m_ctx.level && m_ctx.level->ambientSound)
+                    {
+                        m_ctx.audioSystem.PlaySound(m_ctx.level->ambientSound, m_ctx.level->ambientSoundVolume, true);
+                    }
+                }
+                else
+                {
+                    m_ctx.audioSystem.StopAllSounds();
+                }
             }
             else if (key == GLFW_KEY_F4)
             {

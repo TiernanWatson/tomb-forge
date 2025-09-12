@@ -53,6 +53,8 @@ namespace TombForge::FileIO
 
     void CreateDirectory(const std::string& directory);
 
+    void CopyFile(const std::string& source, const std::string& destination);
+
     void DeleteFile(const std::string& filePath);
 
     bool IsContainedInDirectory(const std::string& filePath, const std::string& directory);

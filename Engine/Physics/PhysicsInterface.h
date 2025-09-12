@@ -28,16 +28,13 @@ namespace TombForge
     struct HitResult
     {
         glm::vec3 point{}; // Point exactly that was hit
-
         glm::vec3 normal{}; // Surface normal from hit
-
         uint32_t objectId{}; // Object ID in level array
     };
 
     struct Ray
     {
         glm::vec3 origin{};
-
         glm::vec3 direction{}; // Length is the total distance
     };
 

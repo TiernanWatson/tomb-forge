@@ -1,7 +1,9 @@
 #include "Engine/Physics/PhysicsInterface.h"
 
+#include <Jolt/Jolt.h>
 #include <Jolt/Physics/Collision/CastResult.h>
 #include <Jolt/Physics/Collision/RayCast.h>
+#include <Jolt/Physics/PhysicsSystem.h>
 
 #include "Engine/Physics/Physics.h"
 #include "Engine/Physics/PlayerFilters.h"

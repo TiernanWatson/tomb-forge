@@ -1,66 +1,87 @@
 #include "Engine/Physics/Physics.h"
 
-#include <cstdarg>
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/RegisterTypes.h>
+#include <Jolt/Core/JobSystemThreadPool.h>
+
+#include "Core/Config.h"
+#include "Core/Debug.h"
+
+#include <varargs.h>
 
 namespace TombForge
 {
-    // Callback for traces, connect this to your own trace function if you have one
-    void TraceImpl(const char* inFMT, ...)
+    namespace
     {
-        // Format the message
-        va_list list;
-        va_start(list, inFMT);
-        char buffer[1024];
-        vsnprintf(buffer, sizeof(buffer), inFMT, list);
-        va_end(list);
-    }
+        constexpr uint32_t MaxTmpAllocSize = 10 * 1024 * 1024; // 10 MB
+
+        void TraceImpl(const char* inFMT, ...)
+        {
+            va_list list;
+            va_start(list, inFMT);
+            char buffer[1024];
+            vsnprintf(buffer, sizeof(buffer), inFMT, list);
+            va_end(list);
+
+            LOG_ERROR("Jolt Trace: %s", buffer);
+        }
 
 #ifdef JPH_ENABLE_ASSERTS
+        bool AssertFailedImpl(const char* inExpression, const char* inMessage, const char* inFile, JPH::uint inLine)
+        {
+            LOG_ERROR("Jolt Assert Failed: %s, %s, %s, %i", inExpression, inMessage, inFile, inLine);
+            return true;
+        };
+#endif
+    }
 
-    // Callback for asserts, connect this to your own assert handler if you have one
-    bool AssertFailedImpl(const char* inExpression, const char* inMessage, const char* inFile, JPH::uint inLine)
+    bool InitPhysics(PhysicsContext& ctx)
     {
-        // Breakpoint
+        const Config& config = Config::Get();
+
+        JPH::RegisterDefaultAllocator();
+
+        ctx.system = new JPH::PhysicsSystem();
+
+        JPH::Trace = TraceImpl;
+        JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
+        JPH::Factory::sInstance = new JPH::Factory();
+        JPH::RegisterTypes();
+
+        ctx.tmpAllocator = new JPH::TempAllocatorImpl(MaxTmpAllocSize);
+
+        // Note: replace this with own implementation if ever implementing a job system
+        ctx.jobSystem = new JPH::JobSystemThreadPool(
+            JPH::cMaxPhysicsJobs, 
+            JPH::cMaxPhysicsBarriers, 
+            std::thread::hardware_concurrency() - 1);
+
+        ctx.system->Init(config.maxPhysicsBodies,
+            config.numPhysicsBodyMutexes,
+            config.maxPhysicsBodyPairs,
+            config.maxPhysicsContactConstraints,
+            ctx.bpLayerInterface,
+            ctx.objVsBpLayerFilter,
+            ctx.objVsObjLayerFilter);
+
         return true;
-    };
-
-#endif // JPH_ENABLE_ASSERTS
-
-    glm::vec3 JphVec3ToGlm(JPH::Vec3 value)
-    {
-        return glm::vec3{ value.GetX(), value.GetY(), value.GetZ() };
     }
 
-    glm::quat JphQuatToGlm(JPH::Quat value)
+    void DestroyPhysics(PhysicsContext& ctx)
     {
-        return glm::quat{ value.GetW(), value.GetX(), value.GetY(), value.GetZ() };
-    }
+        delete ctx.system;
+        ctx.system = nullptr;
 
-    JPH::Vec3 GlmVec3ToJph(glm::vec3 value)
-    {
-        return JPH::Vec3{ value.x, value.y, value.z };
-    }
+        delete ctx.jobSystem;
+        ctx.jobSystem = nullptr;
 
-    JPH::Quat GlmQuatToJph(glm::quat value)
-    {
-        return JPH::Quat{ value.x, value.y, value.z, value.w };
-    }
+        delete ctx.tmpAllocator;
+        ctx.tmpAllocator = nullptr;
 
-    JPH::Ref<JPH::Shape> CreateBoxShape(const Transform& transform, JPH::Vec3 halfExtents, JPH::Vec3 scale)
-    {
-        return new JPH::RotatedTranslatedShape(
-            GlmVec3ToJph(transform.position),
-            GlmQuatToJph(transform.rotation),
-            new JPH::BoxShape(halfExtents * scale));
-    }
+        delete JPH::Factory::sInstance;
+        JPH::Factory::sInstance = nullptr;
 
-    JPH::BodyID CreateBody(JPH::BodyInterface& bodies, JPH::Ref<JPH::Shape> shape, JPH::EMotionType motion, JPH::uint64 userData)
-    {
-        JPH::BodyCreationSettings settings{};
-        settings.mMotionType = motion;
-        settings.SetShape(shape);
-        settings.mUserData = userData;
-
-        return bodies.CreateAndAddBody(settings, JPH::EActivation::Activate);
+        JPH::UnregisterTypes();
     }
 }

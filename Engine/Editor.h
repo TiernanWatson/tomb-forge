@@ -61,6 +61,7 @@ namespace TombForge
         void DrawLaraWindow();
         void DrawModelWindow();
         void DrawRegistryWindow();
+        void DrawLevelWindow();
 
         void NewProject(const std::string& path);
         void LoadProject(const std::string& settingsPath);
@@ -104,6 +105,7 @@ namespace TombForge
         bool m_showLaraWindow : 1{};
         bool m_showRegistryWindow : 1{};
         bool m_showModelWindow : 1{};
+        bool m_showLevelWindow : 1{};
 
         bool m_showColliders : 1{};
         bool m_showMeshWireframe : 1{}; // Not the collider

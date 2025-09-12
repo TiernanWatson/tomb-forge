@@ -4,6 +4,12 @@
 #include <glfw3.h>
 #include <glm/glm.hpp>
 
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
+
 #include "Core/Config.h"
 #include "Core/Maths/Maths.h"
 #include "Engine/Player/Input.h"
@@ -144,6 +150,16 @@ namespace TombForge
             ctx.renderer->InitializeModel(*arrow);
         }
 
+        JPH::BodyID CreateBody(JPH::BodyInterface& bodies, JPH::Ref<JPH::Shape> shape, JPH::EMotionType motion, JPH::uint64 userData)
+        {
+            JPH::BodyCreationSettings settings{};
+            settings.mMotionType = motion;
+            settings.SetShape(shape);
+            settings.mUserData = userData;
+
+            return bodies.CreateAndAddBody(settings, JPH::EActivation::Activate);
+        }
+
         void SetupLara(EngineContext& ctx, AssetId assetId)
         {
             if (!IsValidAssetId(assetId))
@@ -177,7 +193,7 @@ namespace TombForge
             characterSettings->mInnerBodyLayer = ObjectLayers::Character;
             characterSettings->mSupportingVolume = JPH::Plane{ JPH::Vec3::sAxisY(), -LaraRadius };
 
-            ctx.lara.physics = new JPH::CharacterVirtual(characterSettings, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), 0, ctx.physicsSystem);
+            ctx.lara.physics = new JPH::CharacterVirtual(characterSettings, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), 0, ctx.physics.system);
 
             ctx.lara.states.reserve(LARA_STATE_COUNT);
             for (size_t i = 0; i < LARA_STATE_COUNT; i++)
@@ -203,77 +219,6 @@ namespace TombForge
 
             ctx.lara.LoadAnimations(ctx.assetRegistry);
             ctx.lara.SetAnimation(LARA_ANIM_IDLE, 0.0f, true);
-        }
-
-        bool InitPhysics(EngineContext& ctx)
-        {
-            const Config& config = Config::Get();
-
-            JPH::RegisterDefaultAllocator();
-
-            ctx.physicsSystem = new JPH::PhysicsSystem();
-            //m_physicsDebugRenderer = new JoltDebugRenderer();
-
-            JPH::Trace = TraceImpl;
-            JPH_IF_ENABLE_ASSERTS(JPH::AssertFailed = AssertFailedImpl;)
-
-            JPH::Factory::sInstance = new JPH::Factory();
-
-            JPH::RegisterTypes();
-
-            ctx.physicsTmpAllocator = new JPH::TempAllocatorImpl(10 * 1024 * 1024);
-
-            // Note: replace this with own implementation if ever implementing a job system
-            ctx.physicsJobSystem = new JPH::JobSystemThreadPool(JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, std::thread::hardware_concurrency() - 1);
-
-            ctx.physicsSystem->Init(config.maxPhysicsBodies,
-                config.numPhysicsBodyMutexes,
-                config.maxPhysicsBodyPairs,
-                config.maxPhysicsContactConstraints,
-                ctx.bpLayerInterface,
-                ctx.objVsBpLayerFilter,
-                ctx.objVsObjLayerFilter);
-
-            ctx.physicsInterface.SetSystem(ctx.physicsSystem);
-            ctx.physicsInterface.SetObjBroadPhaseFilter(&ctx.objVsBpLayerFilter);
-            ctx.physicsInterface.SetObjectLayerPairFilter(&ctx.objVsObjLayerFilter);
-            ctx.physicsInterface.SetPlayerBpFilter(&ctx.playerBpFilter);
-            ctx.physicsInterface.SetPlayerLayerFilter(&ctx.playerLayerFilter);
-
-            return true;
-        }
-
-        void DestroyPhysics(EngineContext& ctx)
-        {
-            ctx.physicsInterface.SetSystem(nullptr);
-            ctx.physicsInterface.SetObjBroadPhaseFilter(nullptr);
-            ctx.physicsInterface.SetObjectLayerPairFilter(nullptr);
-            ctx.physicsInterface.SetPlayerBpFilter(nullptr);
-            ctx.physicsInterface.SetPlayerLayerFilter(nullptr);
-
-            if (ctx.physicsTmpAllocator)
-            {
-                delete ctx.physicsTmpAllocator;
-                ctx.physicsTmpAllocator = nullptr;
-            }
-
-            if (ctx.physicsJobSystem)
-            {
-                delete ctx.physicsJobSystem;
-                ctx.physicsJobSystem = nullptr;
-            }
-
-            if (JPH::Factory::sInstance)
-            {
-                delete JPH::Factory::sInstance;
-                JPH::Factory::sInstance = nullptr;
-            }
-
-            if (ctx.physicsSystem)
-            {
-                delete ctx.physicsSystem;
-                ctx.physicsSystem = nullptr;
-            }
         }
 
         void InitializeColliders(EngineContext& ctx)
@@ -307,8 +252,10 @@ namespace TombForge
                 box.rigidbody = CreateBody(bodies, shapeMoved, JPH::EMotionType::Static);
             }*/
 
-            for (auto& mesh : ctx.level->meshColliders)
+            for (uint64_t m = 0; m < ctx.level->meshColliders.size(); m++)
             {
+                auto& mesh = ctx.level->meshColliders[m];
+
                 JPH::IndexedTriangleList triList{};
                 for (size_t i = 0; i < mesh.indices.size(); i += 3)
                 {
@@ -340,8 +287,8 @@ namespace TombForge
                 if (result.IsValid())
                 {
                     JPH::Ref<JPH::Shape> meshShape = settings.Create().Get();
-                    auto& bodies = ctx.physicsSystem->GetBodyInterface();
-                    mesh.rigidbody = CreateBody(bodies, meshShape, JPH::EMotionType::Static);
+                    auto& bodies = ctx.physics.system->GetBodyInterface();
+                    mesh.rigidbody = CreateBody(bodies, meshShape, JPH::EMotionType::Static, m);
                 }
                 else
                 {
@@ -362,71 +309,6 @@ namespace TombForge
 
             const glm::quat cameraRotation({ ctx.cameraPitch, ctx.cameraYaw, 0.0f });
             ctx.camera.transform.rotation = glm::slerp(ctx.camera.transform.rotation, cameraRotation, ctx.deltaTime * 30.0f);
-        }
-
-        void UpdateGameplay(EngineContext& ctx)
-        {
-            if (!ctx.lara.model)
-            {
-                return;
-            }
-
-            ctx.lara.cameraPitch = ctx.cameraPitch;
-            ctx.lara.cameraYaw = ctx.cameraYaw;
-
-            auto* state = ctx.lara.states[ctx.lara.stateIndex].get();
-
-            if (ctx.lara.stateIndex != LARA_STATE_COUNT)
-            {
-                if (LaraState nextState = state->ShouldTransition(ctx.laraController); nextState != LARA_STATE_COUNT)
-                {
-                    if (nextState > ctx.lara.states.size() || !ctx.lara.states[nextState])
-                    {
-                        LOG_ERROR("Couldn't transition to state %i", nextState);
-                        return;
-                    }
-
-                    state->Exit(ctx.laraController);
-
-                    state = ctx.lara.states[nextState].get();
-                    state->Begin(ctx.laraController);
-
-                    ctx.lara.stateIndex = nextState;
-                }
-
-                state->PrePhysicsUpdate(ctx.laraController, ctx.deltaTime, ctx.physicsInterface);
-                state->PreAnimationUpdate(ctx.laraController, ctx.deltaTime);
-                state->UpdateAnimation(ctx.laraController, ctx.deltaTime);
-
-                ctx.lara.animPlayer.Process(ctx.deltaTime);
-
-                state->PostAnimationUpdate(ctx.laraController, ctx.deltaTime);
-
-                auto& character = ctx.lara.physics;
-                if (character)
-                {
-                    JPH::CharacterVirtual::ExtendedUpdateSettings settings{};
-
-                    const JPH::Vec3 intendedForward = character->GetGroundVelocity() + GlmVec3ToJph(ctx.lara.actualVelocity);
-                    character->SetLinearVelocity(intendedForward);
-
-                    character->ExtendedUpdate(ctx.deltaTime,
-                        { 0.0f, -9.8f, 0.0f },
-                        settings,
-                        ctx.playerBpFilter,
-                        ctx.playerLayerFilter,
-                        { },
-                        { },
-                        *ctx.physicsTmpAllocator);
-
-                    const JPH::Vec3 resultPosition = character->GetPosition();
-                    ctx.lara.transform.position.x = resultPosition.GetX();
-                    ctx.lara.transform.position.y = resultPosition.GetY();
-                    ctx.lara.transform.position.z = resultPosition.GetZ();
-                }
-
-                ctx.lara.states[ctx.lara.stateIndex]->PostPhysicsUpdate(ctx.laraController, ctx.deltaTime, ctx.physicsInterface);
-            }
         }
 
         void UpdateCamera(EngineContext& ctx)
@@ -463,6 +345,10 @@ namespace TombForge
         }
     }
 
+    // ---------------------------------------------------------------
+    // Engine functions
+    // ---------------------------------------------------------------
+
     bool InitEngine(EngineContext& ctx)
     {
         DEBUG_INIT();
@@ -489,6 +375,7 @@ namespace TombForge
         }
 
         glfwMakeContextCurrent(ctx.window);
+        glfwSwapInterval(0);
 
         double cursorX{};
         double cursorY{};
@@ -514,7 +401,7 @@ namespace TombForge
             throw std::runtime_error("Failed to initialize GLAD");
         }
 
-        InitPhysics(ctx);
+        InitPhysics(ctx.physics);
 
         ctx.renderer = std::make_unique<Renderer>();
         ctx.camera.aspect = static_cast<float>(ctx.windowWidth) / ctx.windowHeight;
@@ -532,22 +419,74 @@ namespace TombForge
 
         const double currentTime = glfwGetTime();
         ctx.deltaTime = Maths::Clamp(static_cast<float>(currentTime - ctx.previousTime), 0.0f, MaxDeltaTime);
-        ctx.totalTime += ctx.deltaTime;
-
-        UpdateCamera(ctx);
 
         ctx.renderer->ClearFramebuffer();
 
         if (ctx.level)
         {
+            UpdateCamera(ctx); // Free camera can still update if paused
+
             if (!ctx.isPaused || ctx.wantsFrameAdvance)
             {
+                ctx.totalTime += ctx.deltaTime;
                 ctx.wantsFrameAdvance = false;
-                UpdateGameplay(ctx);
-                ctx.physicsSystem->Update(ctx.deltaTime, 1, ctx.physicsTmpAllocator, ctx.physicsJobSystem);
+
+                if (ctx.lara.model)
+                {
+                    ctx.lara.cameraPitch = ctx.cameraPitch;
+                    ctx.lara.cameraYaw = ctx.cameraYaw;
+
+                    auto* state = ctx.lara.states[ctx.lara.stateIndex].get();
+                    if (ctx.lara.stateIndex != LARA_STATE_COUNT)
+                    {
+                        if (LaraState nextState = state->ShouldTransition(ctx.laraController); nextState != LARA_STATE_COUNT)
+                        {
+                            if (nextState < ctx.lara.states.size() && ctx.lara.states[nextState])
+                            {
+                                state->Exit(ctx.laraController);
+                                state = ctx.lara.states[nextState].get();
+                                state->Begin(ctx.laraController);
+
+                                ctx.lara.stateIndex = nextState;
+                            }
+                        }
+
+                        state->PreAnimationUpdate(ctx.laraController, ctx.deltaTime);
+                        state->UpdateAnimation(ctx.laraController, ctx.deltaTime);
+                        ctx.lara.animPlayer.Process(ctx.deltaTime);
+                        state->PostAnimationUpdate(ctx.laraController, ctx.deltaTime);
+                    }
+                }
+
+                auto& character = ctx.lara.physics;
+                if (character)
+                {
+                    auto& state = ctx.lara.states[ctx.lara.stateIndex];
+                    state->PrePhysicsUpdate(ctx.laraController, ctx.deltaTime, ctx.physicsInterface);
+
+                    const JPH::Vec3 velocity = character->GetGroundVelocity() + GlmVec3ToJph(ctx.lara.actualVelocity);
+                    character->SetPosition(GlmVec3ToJph(ctx.lara.transform.position));
+                    character->SetLinearVelocity(velocity);
+                    character->ExtendedUpdate(ctx.deltaTime,
+                        { 0.0f, -9.8f, 0.0f },
+                        {},
+                        ctx.physics.playerBpFilter,
+                        ctx.physics.playerLayerFilter,
+                        { },
+                        { },
+                        *ctx.physics.tmpAllocator);
+
+                    ctx.lara.transform.position = JphVec3ToGlm(character->GetPosition());
+                    state->PostPhysicsUpdate(ctx.laraController, ctx.deltaTime, ctx.physicsInterface);
+                }
+
+                ctx.physics.system->Update(ctx.deltaTime, 1, ctx.physics.tmpAllocator, ctx.physics.jobSystem);
             }
+
             ctx.renderer->RenderLevel(*ctx.level, ctx.lara, ctx.camera);
         }
+
+        ctx.audioSystem.Update(ctx.deltaTime);
 
 #if EDITOR_ENABLED
         if (currentTime - ctx.debugData.lastFpsUpdate > 1.0)
@@ -579,7 +518,8 @@ namespace TombForge
     void DestroyEngine(EngineContext& ctx)
     {
         UnloadLevel(ctx);
-        DestroyPhysics(ctx);
+
+        DestroyPhysics(ctx.physics);
 
         glfwDestroyWindow(ctx.window);
         glfwTerminate();
@@ -597,6 +537,7 @@ namespace TombForge
             InitializeColliders(ctx);
 
             ctx.lara.transform.position = ctx.level->startPosition;
+            ctx.lara.previousTransform = ctx.lara.transform;
         }
         else
         {
@@ -614,7 +555,7 @@ namespace TombForge
                 auto bodyId = obj.rigidbody;
                 if (!bodyId.IsInvalid())
                 {
-                    auto& bodies = ctx.physicsSystem->GetBodyInterface();
+                    auto& bodies = ctx.physics.system->GetBodyInterface();
                     bodies.RemoveBody(bodyId);
                     bodies.DestroyBody(bodyId);
                     obj.rigidbody = JPH::BodyID();
@@ -625,7 +566,7 @@ namespace TombForge
                 auto bodyId = obj.rigidbody;
                 if (!bodyId.IsInvalid())
                 {
-                    auto& bodies = ctx.physicsSystem->GetBodyInterface();
+                    auto& bodies = ctx.physics.system->GetBodyInterface();
                     bodies.RemoveBody(bodyId);
                     bodies.DestroyBody(bodyId);
                     obj.rigidbody = JPH::BodyID();
@@ -650,7 +591,7 @@ namespace TombForge
             auto bodyId = ctx.level->meshColliders[colliderToRemove].rigidbody;
             if (!bodyId.IsInvalid())
             {
-                auto& bodies = ctx.physicsSystem->GetBodyInterface();
+                auto& bodies = ctx.physics.system->GetBodyInterface();
                 bodies.RemoveBody(bodyId);
                 bodies.DestroyBody(bodyId);
                 ctx.level->meshColliders[colliderToRemove].rigidbody = JPH::BodyID();
@@ -661,7 +602,7 @@ namespace TombForge
             auto bodyId = ctx.level->boxColliders[colliderToRemove].rigidbody;
             if (!bodyId.IsInvalid())
             {
-                auto& bodies = ctx.physicsSystem->GetBodyInterface();
+                auto& bodies = ctx.physics.system->GetBodyInterface();
                 bodies.RemoveBody(bodyId);
                 bodies.DestroyBody(bodyId);
                 ctx.level->boxColliders[colliderToRemove].rigidbody = JPH::BodyID();

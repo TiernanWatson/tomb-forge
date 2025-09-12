@@ -14,6 +14,9 @@
 #undef far
 #undef min
 #undef max
+#undef CreateDirectory
+#undef DeleteFile
+#undef CopyFile
 
 namespace TombForge
 {

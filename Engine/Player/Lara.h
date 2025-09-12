@@ -3,22 +3,20 @@
 #include <array>
 #include <memory>
 
+#include <Jolt/Jolt.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
+
 #include "Core/Maths/Transform.h"
 #include "Engine/Animation/AnimMachine.h"
 #include "Engine/Assets/AssetRegistry.h"
-#include "Engine/Physics/Physics.h"
 #include "Engine/Player/LaraEnums.h"
 #include "Engine/Player/States/LaraState.h"
 #include "Engine/Rendering/Model.h"
 
 namespace TombForge
 {
-    class AnimationLoader;
-
-    /// <summary>
-    /// All data related to Lara - accessed from lower-level systems, but gameplay should
-    /// use the safer higher-level LaraController proxy class, which references this struct
-    /// </summary>
+    /// All data related to Lara. Accessed from lower-level systems, but gameplay should
+    /// use the safer higher-level LaraController proxy class, which references this struct.
     struct Lara
     {
         std::shared_ptr<Model> model{}; // Lara's model
@@ -46,9 +44,7 @@ namespace TombForge
         uint32_t stateIndex{}; // NEW
 
         void LoadAnimations(AssetRegistry& loader);
-
         void SetAnimation(LaraAnim anim, float fadeTime = 0.0f, bool loop = false);
-
         bool IsGrounded() const;
     };
 }

@@ -73,8 +73,8 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>ThirdParty\TRAODLE\TRAODLE;ThirdParty\Jolt;ThirdParty\libtiff\build\libtiff;ThirdParty\libtiff\libtiff;ThirdParty\imgui;ThirdParty\nlohjson\include\single_include;ThirdParty\stbi\include;ThirdParty\assimp\include;ThirdParty\GLAD\Release\include;ThirdParty\GLFW\Debug\include;ThirdParty\glm;$(IncludePath)</IncludePath>
-    <LibraryPath>ThirdParty\TRAODLE\x64\Debug;ThirdParty\Jolt\Lib;ThirdParty\libtiff\build\libtiff\Debug;ThirdParty\assimp\lib\Debug;ThirdParty\GLFW\Debug\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>ThirdParty\libsndfile\include;ThirdParty\OpenAL\include;ThirdParty\TRAODLE\TRAODLE;ThirdParty\Jolt;ThirdParty\libtiff\build\libtiff;ThirdParty\libtiff\libtiff;ThirdParty\imgui;ThirdParty\nlohjson\include\single_include;ThirdParty\stbi\include;ThirdParty\assimp\include;ThirdParty\GLAD\Release\include;ThirdParty\GLFW\Debug\include;ThirdParty\glm;$(IncludePath)</IncludePath>
+    <LibraryPath>ThirdParty\libsndfile\lib;ThirdParty\OpenAL\libs\Win64;ThirdParty\TRAODLE\x64\Debug;ThirdParty\Jolt\Lib;ThirdParty\libtiff\build\libtiff\Debug;ThirdParty\assimp\lib\Debug;ThirdParty\GLFW\Debug\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" />
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -119,7 +119,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>TRAODLE.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;Jolt.lib;tiffd.lib;assimp-vc143-mtd.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>sndfile.lib;OpenAL32.lib;TRAODLE.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;comdlg32.lib;advapi32.lib;Jolt.lib;tiffd.lib;assimp-vc143-mtd.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -146,8 +146,12 @@
     <ClCompile Include="Core\Graphics\AABB.cpp" />
     <ClCompile Include="Core\Graphics\Frustum.cpp" />
     <ClCompile Include="Engine\Assets\AssetId.cpp" />
+    <ClCompile Include="Engine\Audio\Audio.cpp" />
+    <ClCompile Include="Engine\Audio\AudioSystem.cpp" />
     <ClCompile Include="Engine\Editor.cpp" />
     <ClCompile Include="Engine\Engine.cpp" />
+    <ClCompile Include="Engine\Events\EventBus.cpp" />
+    <ClCompile Include="Engine\Physics\Physics.cpp" />
     <ClCompile Include="Engine\Rendering\Material.cpp" />
     <ClCompile Include="Engine\Rendering\Model.cpp" />
     <ClCompile Include="Engine\Rendering\Graphics.cpp" />
@@ -165,7 +169,6 @@
     <ClCompile Include="Engine\Animation\Skeleton.cpp" />
     <ClCompile Include="Engine\Assets\TextureImport.cpp" />
     <ClCompile Include="Engine\Levels\Level.cpp" />
-    <ClCompile Include="Engine\Physics\Physics.cpp" />
     <ClCompile Include="Engine\Physics\PhysicsInterface.cpp" />
     <ClCompile Include="Engine\Player\Input.cpp" />
     <ClCompile Include="Engine\Player\Lara.cpp" />
@@ -196,8 +199,14 @@
     <ClInclude Include="Core\Graphics\Line.h" />
     <ClInclude Include="Core\IO\BinaryReader.h" />
     <ClInclude Include="Core\IO\BinaryWriter.h" />
+    <ClInclude Include="Engine\Audio\Audio.h" />
+    <ClInclude Include="Engine\Audio\AudioSystem.h" />
+    <ClInclude Include="Engine\Audio\Sound.h" />
     <ClInclude Include="Engine\Editor.h" />
     <ClInclude Include="Engine\Engine.h" />
+    <ClInclude Include="Engine\Events\EventBus.h" />
+    <ClInclude Include="Engine\Physics\Physics.h" />
+    <ClInclude Include="Engine\Physics\PhysicsLayers.h" />
     <ClInclude Include="Engine\Rendering\Material.h" />
     <ClInclude Include="Engine\Rendering\Model.h" />
     <ClInclude Include="Engine\Rendering\Graphics.h" />
@@ -219,7 +228,6 @@
     <ClInclude Include="Engine\Animation\Skeleton.h" />
     <ClInclude Include="Engine\Assets\TextureImport.h" />
     <ClInclude Include="Engine\Levels\Level.h" />
-    <ClInclude Include="Engine\Physics\Physics.h" />
     <ClInclude Include="Engine\Physics\PhysicsInterface.h" />
     <ClInclude Include="Engine\Physics\PlayerFilters.h" />
     <ClInclude Include="Engine\Player\Input.h" />

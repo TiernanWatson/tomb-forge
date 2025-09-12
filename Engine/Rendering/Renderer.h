@@ -19,7 +19,8 @@ namespace TombForge
     struct Model;
     struct Lara;
     struct Camera;
-    struct AnimPlayer;
+
+    class AnimPlayer;
 
     enum OctDirection : uint8_t
     {

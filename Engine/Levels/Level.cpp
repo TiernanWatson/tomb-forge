@@ -7,58 +7,12 @@
 
 namespace TombForge
 {
-    void UpdateBounds(LevelObject& obj)
+    void UpdateBounds(const Level& level, MeshInstance& meshInstance)
     {
-        const glm::vec3 corners[8]
-        {
-            obj.model->bounds.min,
-            { obj.model->bounds.max.x, obj.model->bounds.min.y, obj.model->bounds.min.z },
-            { obj.model->bounds.max.x, obj.model->bounds.min.y, obj.model->bounds.max.z },
-            { obj.model->bounds.min.x, obj.model->bounds.min.y, obj.model->bounds.max.z },
-
-            { obj.model->bounds.min.x, obj.model->bounds.max.y, obj.model->bounds.min.z },
-            { obj.model->bounds.max.x, obj.model->bounds.max.y, obj.model->bounds.min.z },
-            obj.model->bounds.max,
-            { obj.model->bounds.min.x, obj.model->bounds.max.y, obj.model->bounds.max.z },
-        };
-
-        const glm::mat4 transform = obj.transform.AsMatrix();
-
-        float minX{ FLT_MAX };
-        float minY{ FLT_MAX };
-        float minZ{ FLT_MAX };
-        float maxX{ -FLT_MAX };
-        float maxY{ -FLT_MAX };
-        float maxZ{ -FLT_MAX };
-
-        for (const auto& c : corners)
-        {
-            const glm::vec3 c2 = transform * glm::vec4(c, 1.0f);
-
-            minX = c2.x < minX ? c2.x : minX;
-            minY = c2.y < minY ? c2.y : minY;
-            minZ = c2.z < minZ ? c2.z : minZ;
-
-            maxX = c2.x > maxX ? c2.x : maxX;
-            maxY = c2.y > maxY ? c2.y : maxY;
-            maxZ = c2.z > maxZ ? c2.z : maxZ;
-        }
-
-        obj.bounds.min = { minX, minY, minZ };
-        obj.bounds.max = { maxX, maxY, maxZ };
-    }
-
-    void UpdateBounds(MeshInstance& meshInstance)
-    {
-        if (!meshInstance.mesh)
-        {
-            return;
-        }
-
         const glm::mat4 transform = meshInstance.transform.AsMatrix();
 
-        meshInstance.bounds = meshInstance.mesh->bounds;
-
+        auto& mesh = level.models[meshInstance.model]->meshes[meshInstance.mesh];
+        meshInstance.bounds = mesh.bounds;
         meshInstance.bounds.max = transform * glm::vec4(meshInstance.bounds.max, 1.0f);
         meshInstance.bounds.min = transform * glm::vec4(meshInstance.bounds.min, 1.0f);
     }

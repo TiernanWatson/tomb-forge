@@ -17,6 +17,7 @@ namespace TombForge
     struct Material;
     struct Skeleton;
     struct Level;
+    struct Sound;
 
     enum AssetType : uint8_t
     {
@@ -26,7 +27,8 @@ namespace TombForge
         ASSET_TYPE_MATERIAL = 3,
         ASSET_TYPE_ANIMATION = 4,
         ASSET_TYPE_SKELETON = 5,
-        ASSET_TYPE_LEVEL = 6
+        ASSET_TYPE_LEVEL = 6,
+        ASSET_TYPE_SOUND = 7,
     };
 
     struct AssetMeta
@@ -88,8 +90,6 @@ namespace TombForge
 
         AssetId GetAssetId(const std::string& path) const;
 
-        bool IsDirty() const;
-
     private:
         template<AssetType T> struct AssetEnumToType;
         template<> struct AssetEnumToType<ASSET_TYPE_MODEL> { using Type = Model; };
@@ -98,6 +98,7 @@ namespace TombForge
         template<> struct AssetEnumToType<ASSET_TYPE_ANIMATION> { using Type = Animation; };
         template<> struct AssetEnumToType<ASSET_TYPE_SKELETON> { using Type = Skeleton; };
         template<> struct AssetEnumToType<ASSET_TYPE_LEVEL> { using Type = Level; };
+        template<> struct AssetEnumToType<ASSET_TYPE_SOUND> { using Type = Sound; };
 
         template<typename T>
         struct AssetTraits;
@@ -144,6 +145,13 @@ namespace TombForge
             static auto& GetMap(AssetRegistry& reg) { return reg.m_loadedLevels; }
         };
 
+        template<>
+        struct AssetTraits<Sound>
+        {
+            static constexpr AssetType Type = ASSET_TYPE_SOUND;
+            static auto& GetMap(AssetRegistry& reg) { return reg.m_loadedSounds; }
+        };
+
         template<typename T>
         std::shared_ptr<T> LoadAsset(const AssetMeta& meta);
         template<typename T>
@@ -179,6 +187,11 @@ namespace TombForge
         template<>
         void WriteAsset(const Level& asset, const AssetMeta& meta) const;
 
+        template<>
+        std::shared_ptr<Sound> LoadAsset(const AssetMeta& meta);
+        template<>
+        void WriteAsset(const Sound& asset, const AssetMeta& meta) const;
+
         template<typename T>
         bool SaveAssetIfDirty(const AssetId id, AssetMeta& meta);
 
@@ -193,6 +206,7 @@ namespace TombForge
         std::unordered_map<AssetId, std::shared_ptr<Animation>> m_loadedAnimations{};
         std::unordered_map<AssetId, std::shared_ptr<Skeleton>> m_loadedSkeletons{};
         std::unordered_map<AssetId, std::shared_ptr<Level>> m_loadedLevels{};
+        std::unordered_map<AssetId, std::shared_ptr<Sound>> m_loadedSounds{};
 
         std::string m_registryPath{};
         std::string m_basePath{};

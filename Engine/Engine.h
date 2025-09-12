@@ -4,10 +4,10 @@
 #include <vector>
 
 #include "Engine/Assets/AssetRegistry.h"
+#include "Engine/Audio/AudioSystem.h"
 #include "Engine/Levels/Level.h"
 #include "Engine/Physics/Physics.h"
 #include "Engine/Physics/PhysicsInterface.h"
-#include "Engine/Physics/PlayerFilters.h"
 #include "Engine/Player/Lara.h"
 #include "Engine/Player/LaraController.h"
 #include "Engine/Rendering/Renderer.h"
@@ -33,17 +33,8 @@ namespace TombForge
 
         AssetRegistry assetRegistry{};
         PhysicsInterface physicsInterface{};
-
-        JPH::PhysicsSystem* physicsSystem{};
-        JPH::TempAllocatorImpl* physicsTmpAllocator{};
-        JPH::JobSystem* physicsJobSystem{};
-
-        BPLayerInterfaceImpl bpLayerInterface{};
-        ObjectVsBroadPhaseLayerFilterImpl objVsBpLayerFilter{};
-        ObjectLayerPairFilterImpl objVsObjLayerFilter{};
-        PlayerBpFilter playerBpFilter{};
-        PlayerLayerFilter playerLayerFilter{};
-
+        AudioSystem audioSystem{};
+        PhysicsContext physics{};
         GLFWwindow* window{};
 
         std::shared_ptr<Level> level{};
@@ -66,7 +57,7 @@ namespace TombForge
         float cameraSpeed{ DefaultCameraSpeed };
         float freeCameraSpeed{ DefaultCameraSpeed };
         float deltaTime{};
-        float totalTime{};
+        float totalTime{}; // Total simulation time, not wall-clock time
 
         bool shouldQuit{};
         bool wantsFrameAdvance{};

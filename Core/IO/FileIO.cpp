@@ -174,6 +174,23 @@ namespace TombForge
         }
     }
 
+    void FileIO::CopyFile(const std::string& source, const std::string& destination)
+    {
+        if (source.empty() || destination.empty())
+        {
+            LOG_ERROR("Trying to copy file with empty string");
+            return;
+        }
+
+        if (!std::filesystem::exists(source))
+        {
+            LOG_ERROR("Trying to copy file %s that doesn't exist", source.c_str());
+            return;
+        }
+
+        std::filesystem::copy_file(source, destination, std::filesystem::copy_options::overwrite_existing);
+    }
+
     void FileIO::DeleteFile(const std::string& filePath)
     {
         if (filePath.empty())

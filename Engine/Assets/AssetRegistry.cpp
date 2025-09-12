@@ -2,10 +2,12 @@
 
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include <sndfile.h>
 
 #include "Core/IO/FileIO.h"
 #include "Engine/Animation/Animation.h"
 #include "Engine/Animation/Skeleton.h"
+#include "Engine/Audio/Sound.h"
 #include "Engine/Levels/Level.h"
 #include "Engine/Rendering/Material.h"
 #include "Engine/Rendering/Model.h"
@@ -128,6 +130,8 @@ namespace TombForge
                     }
                     break;
                 }
+                case ASSET_TYPE_SOUND:
+                    break; // No data to save for sounds yet
                 }
 
                 nlohmann::json item{};
@@ -162,11 +166,6 @@ namespace TombForge
         return InvalidAssetId;
     }
 
-    bool AssetRegistry::IsDirty() const
-    {
-        throw std::exception("Need to implement");
-    }
-
     std::string AssetRegistry::GetAbsolutePath(const std::string& path) const
     {
         if (FileIO::IsAbsolutePath(path))
@@ -175,6 +174,44 @@ namespace TombForge
         }
 
         return m_basePath + path;
+    }
+
+    template<>
+    std::shared_ptr<Sound> AssetRegistry::LoadAsset(const AssetMeta& meta)
+    {
+        const std::string absPath = GetAbsolutePath(meta.assetPath);
+
+        SF_INFO sfInfo{};
+        SNDFILE* sndFile = sf_open(absPath.c_str(), SFM_READ, &sfInfo);
+        if (!sndFile)
+        {
+            LOG_ERROR("Failed to open audio file: %s", meta.assetPath.c_str());
+            return nullptr;
+        }
+
+        std::shared_ptr<Sound> sound = std::make_shared<Sound>();
+        sound->data.resize(sfInfo.frames * sfInfo.channels);
+        sound->sampleRate = sfInfo.samplerate;
+        sound->channels = sfInfo.channels == 1 ? SOUND_CHANNEL_MONO : SOUND_CHANNEL_STEREO;
+        sound->numFrames = sfInfo.frames;
+        sound->format = SOUND_FORMAT_WAV;
+        
+        sf_count_t numFramesRead = sf_readf_short(sndFile, sound->data.data(), sfInfo.frames);
+        sf_close(sndFile);
+
+        if (numFramesRead != sfInfo.frames || numFramesRead < 1)
+        {
+            LOG_ERROR("Failed to read all frames from audio file: %s", meta.assetPath.c_str());
+            return nullptr;
+        }
+
+        return sound;
+    }
+
+    template<>
+    void AssetRegistry::WriteAsset(const Sound& asset, const AssetMeta& meta) const
+    {
+        // Sounds have no data other than a file path for now
     }
 
     template<>
@@ -626,6 +663,58 @@ namespace TombForge
 
             nlohmann::json json = nlohmann::json::parse(inFile);
 
+            for (const auto& item : json["models"])
+            {
+                const AssetId modelId = item.get<AssetId>();
+                auto model = Load<Model>(modelId);
+                if (model)
+                {
+                    result->models.push_back(model);
+                }
+            }
+
+            for (const auto& item : json["meshes"])
+            {
+                MeshInstance instance{};
+                instance.name = item["name"].get<std::string>();
+                instance.model = item["model"].get<AssetId>();
+                instance.mesh = item["mesh"].get<AssetId>();
+                const auto& transform = item["transform"];
+                instance.transform.position = glm::vec3{ transform[0], transform[1], transform[2] };
+                instance.transform.rotation = glm::quat{ transform[3], transform[4], transform[5], transform[6] };
+                instance.transform.scale = glm::vec3{ transform[7], transform[8], transform[9] };
+                result->meshes.push_back(instance);
+            }
+
+            for (const auto& item : json["pointLights"])
+            {
+                PointLight light{};
+                const auto& position = item["position"];
+                light.position = glm::vec3{ position[0], position[1], position[2] };
+                const auto& color = item["color"];
+                light.color = glm::vec3{ color[0], color[1], color[2] };
+                light.innerRadius = item["innerRadius"].get<float>();
+                light.outerRadius = item["outerRadius"].get<float>();
+                result->pointLights.push_back(light);
+            }
+
+            if (json.contains("directionalLight"))
+            {
+                const auto& dir = json["directionalLight"]["direction"];
+                result->directionalLight.dir = glm::vec3{ dir[0], dir[1], dir[2] };
+                const auto& color = json["directionalLight"]["color"];
+                result->directionalLight.color = glm::vec3{ color[0], color[1], color[2] };
+            }
+
+            if (json.contains("ambientSound"))
+            {
+                const AssetId soundId = json["ambientSound"].get<AssetId>();
+                if (IsValidAssetId(soundId))
+                {
+                    result->ambientSound = Load<Sound>(soundId);
+                }
+            }
+
             return result;
         }
 
@@ -647,33 +736,50 @@ namespace TombForge
 
         nlohmann::json json;
 
-        /*for (size_t i = 0; i < staticObjects.size(); i++)
+        for (size_t i = 0; i < asset.models.size(); i++)
         {
-            auto& obj = staticObjects[i];
+            auto& obj = asset.models[i];
+            json["models"][i] = obj->id;
+        }
 
-            glm::vec3 rotation = obj.transform.EulerRotation();
+        for (size_t i = 0; i < asset.meshes.size(); i++)
+        {
+            auto& obj = asset.meshes[i];
+            json["meshes"][i]["name"] = obj.name;
+            json["meshes"][i]["model"] = obj.model;
+            json["meshes"][i]["mesh"] = obj.mesh;
+            json["meshes"][i]["transform"] = 
+            {
+                obj.transform.position.x, obj.transform.position.y, obj.transform.position.z,
+                obj.transform.rotation.w, obj.transform.rotation.x, obj.transform.rotation.y, obj.transform.rotation.z,
+                obj.transform.scale.x, obj.transform.scale.y, obj.transform.scale.z
+            };
+        }
 
-            auto& jsonSec = json["statics"][i];
-            jsonSec["transform"]["position"]["x"] = obj.transform.position.x;
-            jsonSec["transform"]["position"]["y"] = obj.transform.position.y;
-            jsonSec["transform"]["position"]["z"] = obj.transform.position.z;
-            jsonSec["transform"]["rotation"]["x"] = rotation.x;
-            jsonSec["transform"]["rotation"]["y"] = rotation.y;
-            jsonSec["transform"]["rotation"]["z"] = rotation.z;
-            jsonSec["transform"]["scale"]["x"] = obj.transform.scale.x;
-            jsonSec["transform"]["scale"]["y"] = obj.transform.scale.y;
-            jsonSec["transform"]["scale"]["z"] = obj.transform.scale.z;
-            json["statics"][i]["name"] = obj.name;
-            json["statics"][i]["model"] = obj.model->name;
-            json["statics"][i]["parent"] = obj.parent;
-            json["statics"][i]["physics"] = obj.rigidbody.IsInvalid() ? 0 : 1;
-            json["statics"][i]["halfExtents"]["x"] = obj.halfExtents.x;
-            json["statics"][i]["halfExtents"]["y"] = obj.halfExtents.y;
-            json["statics"][i]["halfExtents"]["z"] = obj.halfExtents.z;
-        }*/
+        for (size_t i = 0; i < asset.pointLights.size(); i++)
+        {
+            auto& obj = asset.pointLights[i];
+            json["pointLights"][i]["position"] = { obj.position.x, obj.position.y, obj.position.z };
+            json["pointLights"][i]["color"] = { obj.color.r, obj.color.g, obj.color.b };
+            json["pointLights"][i]["innerRadius"] = obj.innerRadius;
+            json["pointLights"][i]["outerRadius"] = obj.outerRadius;
+        }
+
+        json["directionalLight"]["direction"] = {
+            asset.directionalLight.dir.x,
+            asset.directionalLight.dir.y,
+            asset.directionalLight.dir.z
+        };
+
+        json["directionalLight"]["color"] = {
+            asset.directionalLight.color.r,
+            asset.directionalLight.color.g,
+            asset.directionalLight.color.b
+        };
+
+        json["ambientSound"] = asset.ambientSound ? asset.ambientSound->id : InvalidAssetId;
 
         outFile << json.dump(4);
-
         outFile.flush();
         outFile.close();
     }
