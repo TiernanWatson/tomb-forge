@@ -54,7 +54,6 @@ namespace TombForge
         std::vector<OctNode> nodes{};
 
         bool Build(const Level& level, const float minNodeSize = 10.0f);
-
         bool Insert(uint32_t objIndex, const AABB& aabb, const float minNodeSize = 5.0f, uint32_t nodeIndex = 0, uint8_t depth = 0);
     };
 
@@ -71,6 +70,9 @@ namespace TombForge
 
         // This destroys all the GPU instances of the meshes when a level is unloaded
         void DeloadLevel(Level& level);
+
+        // Updates the lights texture on the GPU whenever they change
+        void UpdateLights(Level& level);
 
         // To be called before rendering a frame
         void ClearFramebuffer();
@@ -118,9 +120,15 @@ namespace TombForge
 
             ShaderLocation ambientColor{};
             ShaderLocation ambientIntensity{};
+
+            ShaderLocation dirLightColor{};
+            ShaderLocation dirLightDirection{};
+            ShaderLocation dirLightIntensity{};
         };
 
         void InitializeShaders();
+
+        void InitializeDefaultTextures();
 
         void SubmitLightsTexture(const std::vector<PointLight>& lights);
 
@@ -142,7 +150,7 @@ namespace TombForge
 
         void DrawModelDepth(const Model& model, const Transform& transform);
 
-        void DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices);
+        void DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices, const Material* overrideMaterial = nullptr);
 
         void ExtractCameraPlanes(Frustum& result, const glm::mat4& viewProj) const;
 
@@ -155,6 +163,9 @@ namespace TombForge
         Shader m_depthShader{};
 
         Texture m_lightsTexture{};
+        Texture m_whiteTexture{};
+        Texture m_magentaTexture{};
+        Texture m_flatNormal{};
 
         ShaderLocations m_skinnedLocations{};
 

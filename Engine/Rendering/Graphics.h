@@ -89,13 +89,10 @@ namespace TombForge
         // Mesh Functions
 
         MeshHandle CreateMeshInstance(const Mesh& mesh);
-
         void DestroyMeshInstance(MeshHandle& instance);
 
         void DrawMesh(MeshHandle mesh);
-
         void DrawLines(const std::vector<Line>& lines);
-
         void DrawTriangle(const Triangle& triangle);
 
         // Texture Functions
@@ -107,42 +104,32 @@ namespace TombForge
         bool CompileShader(const std::string& vertexSource, const std::string& fragmentSource, unsigned int& outProgramId);
 
         void SetFloat(const std::string& name, float value);
-
         void SetFloat(ShaderLocation location, float value);
 
         void SetVec3(const std::string& name, glm::vec3 value);
-
         void SetVec3(ShaderLocation location, const glm::vec3& value);
 
         void SetVec4(const std::string& name, glm::vec4 value);
-
         void SetVec4(ShaderLocation location, const glm::vec4& value);
 
         void SetInt(const std::string& name, int value);
-
         void SetInt(ShaderLocation location, int value);
 
         void SetMatrix4(const std::string& name, const glm::mat4& matrix, GLuint programId);
-
         inline void SetMatrix4(const std::string& name, const glm::mat4& matrix)
         {
             SetMatrix4(name, matrix, m_activeShader);
         }
-
         void SetMatrix4(ShaderLocation location, const glm::mat4& value);
 
         void SetMatrix4Array(const std::string& name, const std::vector<glm::mat4>& items);
-
         void SetMatrix4Array(ShaderLocation location, const std::vector<glm::mat4>& items);
 
         void SetTexture(const std::string& name, const TextureHandle handle);
-
         void SetTexture(ShaderLocation location, const TextureHandle handle);
-
         void SetTexture(ShaderLocation location, const TextureHandle handle, int unit);
 
         void SetWhiteTexture(const std::string& name);
-
         void SetMagentaTexture(const std::string& name);
 
         // Buffer and pipeline
@@ -150,13 +137,10 @@ namespace TombForge
         void ResizeFramebuffer(int width, int height);
 
         void ClearFrameBuffer();
-
         void ClearDepthBuffer();
 
         void SetDepthWriteStatus(bool value);
-
         void SetColorWriteStatus(bool value);
-
         void SetDepthFunc(DepthFunc func);
 
         // Shaders

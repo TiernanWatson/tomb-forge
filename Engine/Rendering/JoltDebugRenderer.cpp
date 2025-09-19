@@ -9,20 +9,30 @@ namespace TombForge
 {
     void JoltDebugRenderer::SubmitLines(const Transform& transform, float fovY, float aspect, float near, float far)
     {
+        if (m_lineBuffer.empty() && m_timedLines.empty())
+        {
+            return;
+        }
+
         Graphics& graphics = Graphics::Get();
 
-        graphics.UseLineShader();
-
         glm::mat4 cameraView = glm::inverse(transform.AsMatrix());
-        graphics.SetMatrix4("view", cameraView);
-
         glm::mat4 projection = glm::perspective(fovY, aspect, near, far);
-        graphics.SetMatrix4("projection", projection);
 
+        graphics.UseLineShader();
+        graphics.SetMatrix4("view", cameraView);
+        graphics.SetMatrix4("projection", projection);
         graphics.SetMatrix4("model", glm::mat4{ 1.0f });
 
-        graphics.DrawLines(m_lineBuffer);
-        graphics.DrawLines(m_timedLines);
+        if (!m_lineBuffer.empty())
+        {
+            graphics.DrawLines(m_lineBuffer);
+        }
+
+        if (!m_timedLines.empty())
+        {
+            graphics.DrawLines(m_timedLines);
+        }
     }
 
     void JoltDebugRenderer::DrawColoredLine(glm::vec3 from, glm::vec3 to, glm::vec4 color)

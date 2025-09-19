@@ -27,7 +27,7 @@ namespace TombForge
     /// This is an exposed struct but should not be accessible outside of engine code.
     struct EngineContext
     {
-        static constexpr float DefaultCameraSpeed{ 5.0f };
+        static constexpr float DefaultCameraSpeed{ 10.0f };
 
         std::unique_ptr<Renderer> renderer{};
 

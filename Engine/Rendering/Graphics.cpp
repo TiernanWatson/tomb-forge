@@ -14,73 +14,63 @@
 
 namespace TombForge
 {
-    static constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedVertexShader.glsl";
-    static constexpr char const* BaseFragmentShaderPath = "Shaders\\BaseFragmentShader.glsl";
-    static constexpr char const* BaseVertexShaderPath = "Shaders\\BaseVertexShader.glsl";
-    static constexpr char const* LineVertexShaderPath = "Shaders\\LineVertexShader.glsl";
-    static constexpr char const* ColorFragmentShaderPath = "Shaders\\ColorFragmentShader.glsl";
-    static constexpr char const* GizmoFragmentShaderPath = "Shaders\\GizmoFragmentShader.glsl";
-    static constexpr char const* DepthFragmentShaderPath = "Shaders\\DepthFragmentShader.glsl";
-    static constexpr char const* DepthVertexShaderPath = "Shaders\\DepthVertexShader.glsl";
-
-    static constexpr float ClearBufferColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
-
-    static bool s_graphicsInitialized{ false };
-
-    uint32_t MeshHandle::InvalidMeshIndex = (uint32_t)-1;
-    uint32_t TextureHandle::InvalidTextureIndex = (uint32_t)-1;
-
-    // Generic function to test if any errors occurred
-    void LoopGLErrors()
+    namespace
     {
-        GLenum error{};
-        for (GLenum error = glGetError(); error != GL_NO_ERROR; error = glGetError())
+        constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedVertexShader.glsl";
+        constexpr char const* BaseFragmentShaderPath = "Shaders\\BaseFragmentShader.glsl";
+        constexpr char const* BaseVertexShaderPath = "Shaders\\BaseVertexShader.glsl";
+        constexpr char const* LineVertexShaderPath = "Shaders\\LineVertexShader.glsl";
+        constexpr char const* ColorFragmentShaderPath = "Shaders\\ColorFragmentShader.glsl";
+        constexpr char const* GizmoFragmentShaderPath = "Shaders\\GizmoFragmentShader.glsl";
+        constexpr char const* DepthFragmentShaderPath = "Shaders\\DepthFragmentShader.glsl";
+        constexpr char const* DepthVertexShaderPath = "Shaders\\DepthVertexShader.glsl";
+
+        constexpr float ClearBufferColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
+
+        // Generic function to test if any errors occurred
+        void LoopGLErrors()
         {
-            switch (error)
+            GLenum error{};
+            for (GLenum error = glGetError(); error != GL_NO_ERROR; error = glGetError())
             {
-            case GL_INVALID_ENUM:
-                LOG_ERROR("GL Error invalid enum");
-                break;
-            case GL_INVALID_VALUE:
-                LOG_ERROR("GL Error invalid value");
-                break;
-            case GL_INVALID_OPERATION:
-                LOG_ERROR("GL Error invalid operation");
-                break;
-            case GL_INVALID_FRAMEBUFFER_OPERATION:
-                LOG_ERROR("GL Error invalid framebuffer operation");
-                break;
-            case GL_OUT_OF_MEMORY:
-                LOG_ERROR("GL Error out of memory");
-                break;
-            case GL_STACK_UNDERFLOW:
-                LOG_ERROR("GL Error stack underflow");
-                break;
-            case GL_STACK_OVERFLOW:
-                LOG_ERROR("GL Error stack overflow");
-                break;
-            default:
-                LOG_ERROR("Undefined GL error");
-                break;
+                switch (error)
+                {
+                case GL_INVALID_ENUM:
+                    LOG_ERROR("GL Error invalid enum");
+                    break;
+                case GL_INVALID_VALUE:
+                    LOG_ERROR("GL Error invalid value");
+                    break;
+                case GL_INVALID_OPERATION:
+                    LOG_ERROR("GL Error invalid operation");
+                    break;
+                case GL_INVALID_FRAMEBUFFER_OPERATION:
+                    LOG_ERROR("GL Error invalid framebuffer operation");
+                    break;
+                case GL_OUT_OF_MEMORY:
+                    LOG_ERROR("GL Error out of memory");
+                    break;
+                case GL_STACK_UNDERFLOW:
+                    LOG_ERROR("GL Error stack underflow");
+                    break;
+                case GL_STACK_OVERFLOW:
+                    LOG_ERROR("GL Error stack overflow");
+                    break;
+                default:
+                    LOG_ERROR("Undefined GL error");
+                    break;
+                }
             }
         }
     }
 
+    uint32_t MeshHandle::InvalidMeshIndex = (uint32_t)-1;
+    uint32_t TextureHandle::InvalidTextureIndex = (uint32_t)-1;
+
     Graphics::Graphics()
     {
-        if (s_graphicsInitialized)
-        {
-            throw std::runtime_error("Trying to initialize GLAD twice");
-        }
-
-        /*if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-        {
-            throw std::runtime_error("Failed to initialize GLAD");
-        }*/
-
         const std::string vertexSource = FileIO::ReadEntireFile(SkinnedVertexShaderPath);
         const std::string fragSource = FileIO::ReadEntireFile(BaseFragmentShaderPath);
-
         if (!CompileShader(vertexSource, fragSource, m_skinnedShader))
         {
             throw std::runtime_error("Failed to compile default shader");
@@ -88,7 +78,6 @@ namespace TombForge
 
         const std::string lineVertexSource = FileIO::ReadEntireFile(LineVertexShaderPath);
         const std::string colorFragmentSource = FileIO::ReadEntireFile(ColorFragmentShaderPath);
-
         if (!CompileShader(lineVertexSource, colorFragmentSource, m_lineShader))
         {
             throw std::runtime_error("Failed to compile line shader");
@@ -96,7 +85,6 @@ namespace TombForge
 
         const std::string gizmoFragmentSource = FileIO::ReadEntireFile(GizmoFragmentShaderPath);
         const std::string baseVertexSource = FileIO::ReadEntireFile(BaseVertexShaderPath);
-
         if (!CompileShader(baseVertexSource, gizmoFragmentSource, m_gizmoShader))
         {
             throw std::runtime_error("Failed to compile gizmo shader");
@@ -104,7 +92,6 @@ namespace TombForge
 
         const std::string depthFragmentSource = FileIO::ReadEntireFile(DepthFragmentShaderPath);
         const std::string depthVertexSource = FileIO::ReadEntireFile(DepthVertexShaderPath);
-
         if (!CompileShader(depthVertexSource, ""/*depthFragmentSource*/, m_depthShader))
         {
             throw std::runtime_error("Failed to compile depth shader");
@@ -144,8 +131,6 @@ namespace TombForge
 
         m_magentaTexture->gpuHandle = CreateTextureInstance(*m_magentaTexture);
 
-        s_graphicsInitialized = true;
-
         LoopGLErrors();
     }
 
@@ -157,6 +142,7 @@ namespace TombForge
 
     Graphics& Graphics::Get()
     {
+        // todo: remove this singleton
         static Graphics graphics{};
         return graphics;
     }
@@ -210,16 +196,22 @@ namespace TombForge
         glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
 
         glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
+        glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, tangent));
 
         glEnableVertexAttribArray(3);
-        glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
+        glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, bitangent));
 
         glEnableVertexAttribArray(4);
-        glVertexAttribIPointer(4, 4, GL_INT, sizeof(Vertex), (void*)offsetof(Vertex, boneIndices));
+        glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, color));
 
         glEnableVertexAttribArray(5);
-        glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, boneWeights));
+        glVertexAttribPointer(5, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, uv));
+
+        glEnableVertexAttribArray(6);
+        glVertexAttribIPointer(6, 4, GL_INT, sizeof(Vertex), (void*)offsetof(Vertex, boneIndices));
+
+        glEnableVertexAttribArray(7);
+        glVertexAttribPointer(7, 4, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, boneWeights));
 
         LoopGLErrors();
 
@@ -367,15 +359,14 @@ namespace TombForge
             break;
         case TextureFormat::RGB:
             format = GL_RGB;
-            //internalFormat = isFloats ? GL_RGB32F : GL_RGB8;
-            internalFormat = isFloats ? GL_RGB32F : GL_SRGB8;
+            internalFormat = isFloats ? GL_RGB32F : (texture.sRGB ? GL_SRGB8 : GL_RGB8);
             break;
         case TextureFormat::RGBA:
             format = GL_RGBA;
-            //internalFormat = isFloats ? GL_RGBA32F : GL_RGBA8;
-            internalFormat = isFloats ? GL_RGBA32F : GL_SRGB8_ALPHA8;
+            internalFormat = isFloats ? GL_RGBA32F : (texture.sRGB ? GL_SRGB8_ALPHA8 : GL_RGBA8);
             break;
         default:
+            LOG_ERROR("Unsupported texture format %i", texture.format);
             return TextureHandle{};
         }
 

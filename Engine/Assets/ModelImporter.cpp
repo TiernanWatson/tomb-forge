@@ -1,5 +1,6 @@
 #include "Engine/Assets/ModelImporter.h"
 
+#include <memory>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -18,22 +19,22 @@
 
 namespace TombForge
 {
-    // Importer implementation
+    namespace
+    {
+        // To hold bone info temporarily during processing
+        struct BoneInfo
+        {
+            glm::mat4 offset{};
+            glm::mat4 transform{}; // Relative to parent
+            glm::mat4 globalTransform{}; // Absolute in model space
+        };
+    }
 
     struct ImporterImpl
     {
+        // Keeps the assimp library out of the header
         Assimp::Importer importer{};
     };
-
-    // To hold bone info temporarily
-    struct BoneInfo
-    {
-        glm::mat4 offset{};
-        glm::mat4 transform{}; // Relative to parent
-        glm::mat4 globalTransform{}; // Absolute in model space
-    };
-
-    // File Functions
 
     std::string GetDirectoryFromFilePath(const std::string& filePath)
     {
@@ -212,6 +213,108 @@ namespace TombForge
         }
     }
 
+    static bool ProcessEmbeddedTexture(Texture& outTexture, const aiTexture* texture)
+    {
+        if (!texture)
+        {
+            LOG_ERROR("Tried to process a null embedded texture");
+            return false;
+        }
+
+        outTexture.width = texture->mWidth;
+        outTexture.height = texture->mHeight;
+        outTexture.format = TextureFormat::RGBA; // Assimp uses 4 channels for everything
+
+        if (outTexture.height == 0) // Compressed texture
+        {
+            int width{};
+            int height{};
+            int channels{};
+
+            stbi_uc* imageData = stbi_load_from_memory(
+                reinterpret_cast<const stbi_uc*>(texture->pcData),
+                static_cast<int>(texture->mWidth),
+                &width,
+                &height,
+                &channels,
+                STBI_rgb_alpha);
+
+            if (imageData)
+            {
+                const size_t dataSize = width * height * 4;
+                outTexture.data.resize(dataSize);
+                memcpy(outTexture.data.data(),imageData, dataSize);
+                outTexture.width = static_cast<uint32_t>(width);
+                outTexture.height = static_cast<uint32_t>(height);
+                stbi_image_free(imageData);
+            }
+            else
+            {
+                stbi_image_free(imageData);
+                LOG_WARNING("STBI failed to load embedded compressed texture: %s", stbi_failure_reason());
+                return false;
+            }
+        }
+        else // Uncompressed texture
+        {
+            const size_t dataSize = outTexture.width * outTexture.height * 4;
+            outTexture.data.resize(dataSize);
+            memcpy(outTexture.data.data(), texture->pcData, dataSize);
+        }
+        return true;
+    }
+
+    static std::shared_ptr<Texture> ProcessTexture(const aiScene* scene, aiString texturePath, const std::string basePath)
+    {
+        std::shared_ptr<Texture> texture = std::make_shared<Texture>();
+
+        if (texturePath.data[0] == '*') // Embedded starts with *
+        {
+            if (!ProcessEmbeddedTexture(*texture, scene->GetEmbeddedTexture(texturePath.C_Str())))
+            {
+                return nullptr;
+            }
+        }
+        else
+        {
+            std::string fullTexturePath = basePath;
+            if (FileIO::IsAbsolutePath(texturePath.C_Str()))
+            {
+                fullTexturePath = texturePath.C_Str();
+            }
+            else
+            {
+                fullTexturePath = basePath;
+                fullTexturePath.append(texturePath.C_Str());
+            }
+
+            const std::string textureFileName = GetFileName(texturePath.C_Str());
+            const std::string textureWithExt = GetFileName(texturePath.C_Str(), true);
+
+            if (!FileIO::FileExists(fullTexturePath))
+            {
+                std::string possiblePath{};
+                if (FileIO::SearchForFile(textureWithExt, basePath, &possiblePath))
+                {
+                    fullTexturePath = possiblePath;
+                }
+                else
+                {
+                    LOG_WARNING("Couldn't find texture %s", fullTexturePath.c_str());
+                    return nullptr;
+                }
+            }
+
+            if (!ImportTexture(fullTexturePath, *texture))
+            {
+                LOG_WARNING("Could not import texture: %s", fullTexturePath.c_str());
+                return nullptr;
+            }
+        }
+
+        return texture;
+    }
+
     static void FillMaterial(const aiScene* scene, const aiMesh* mesh, Material& outMaterial, const std::string& outBaseName, const std::string& basePath)
     {
         const aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
@@ -223,65 +326,62 @@ namespace TombForge
         outMaterial.name.append(material->GetName().C_Str());
         outMaterial.name.append(".tfmat");
 
-        aiTextureType diffuseTypesSearch[]{ aiTextureType_DIFFUSE, aiTextureType_BASE_COLOR, aiTextureType_AMBIENT };
-
-        for (aiTextureType type : diffuseTypesSearch)
+        const aiTextureType diffuseTypesSearch[]{ aiTextureType_DIFFUSE, aiTextureType_BASE_COLOR, aiTextureType_AMBIENT };
+        for (const aiTextureType type : diffuseTypesSearch)
         {
             for (unsigned int t = 0; t < material->GetTextureCount(type); t++)
             {
                 aiString texturePath;
                 material->GetTexture(type, t, &texturePath);
-
                 if (texturePath.length < 1)
                 {
                     continue;
                 }
 
-                std::string fullTexturePath = basePath;
-                if (FileIO::IsAbsolutePath(texturePath.C_Str()))
+                if (auto texture = ProcessTexture(scene, texturePath, basePath); texture)
                 {
-                    fullTexturePath = texturePath.C_Str();
-                }
-                else
-                {
-                    fullTexturePath = basePath;
-                    fullTexturePath.append(texturePath.C_Str());
-                }
+                    texture->name = outBaseName;
+                    texture->name.append("_T_");
+                    texture->name.append(std::to_string(t));
+                    texture->name.append("_");
+                    texture->name.append(texturePath.data[0] == '*' ? "Embedded" : FileIO::GetFileName(texturePath.data));
+                    texture->name.append(".tftex");
+                    texture->sRGB = true;
 
-                const std::string textureFileName = GetFileName(texturePath.C_Str());
-                const std::string textureWithExt = GetFileName(texturePath.C_Str(), true);
-
-                if (!FileIO::FileExists(fullTexturePath))
-                {
-                    std::string possiblePath{};
-                    if (FileIO::SearchForFile(textureWithExt, basePath, &possiblePath))
-                    {
-                        fullTexturePath = possiblePath;
-                    }
-                    else
-                    {
-                        LOG_WARNING("Couldn't find texture %s", fullTexturePath.c_str());
-                        continue;
-                    }
-                }
-
-                std::shared_ptr<Texture> texture = std::make_shared<Texture>();
-                texture->name = outBaseName;
-                texture->name.append("_T_");
-                texture->name.append(std::to_string(t));
-                texture->name.append("_");
-                texture->name.append(textureFileName);
-                texture->name.append(".tftex");
-
-                if (ImportTexture(fullTexturePath, *texture))
-                {
                     outMaterial.diffuse = texture;
                     outMaterial.AddFlag(MATERIAL_FLAG_DIFFUSE);
+
                     break;
                 }
-                else
+            }
+        }
+
+        const aiTextureType normalTypesSearch[]{ aiTextureType_NORMALS, aiTextureType_HEIGHT, aiTextureType_DISPLACEMENT };
+        for (const aiTextureType type : normalTypesSearch)
+        {
+            for (unsigned int t = 0; t < material->GetTextureCount(type); t++)
+            {
+                aiString texturePath;
+                material->GetTexture(type, t, &texturePath);
+                if (texturePath.length < 1)
                 {
-                    LOG_WARNING("Could not import texture: %s", fullTexturePath.c_str());
+                    continue;
+                }
+
+                if (auto texture = ProcessTexture(scene, texturePath, basePath); texture)
+                {
+                    texture->name = outBaseName;
+                    texture->name.append("_N_");
+                    texture->name.append(std::to_string(t));
+                    texture->name.append("_");
+                    texture->name.append(texturePath.data[0] == '*' ? "Embedded" : FileIO::GetFileName(texturePath.data));
+                    texture->name.append(".tftex");
+                    texture->sRGB = false;
+
+                    outMaterial.normal = texture;
+                    outMaterial.AddFlag(MATERIAL_FLAG_NORMAL);
+
+                    break;
                 }
             }
         }
@@ -314,31 +414,31 @@ namespace TombForge
 
             for (unsigned int v = 0; v < mesh->mNumVertices; v++)
             {
-                glm::vec3 position{ mesh->mVertices[v].x, mesh->mVertices[v].y, mesh->mVertices[v].z };
-                //position = recursiveTransform * glm::vec4(position, 1.0f);
-                position *= settings.scale; // Do this separate from transform as we don't want to scale normals
+                auto& vertex = outMesh.vertices.emplace_back();
 
-                glm::vec3 normal{};
+                vertex.position = { mesh->mVertices[v].x, mesh->mVertices[v].y, mesh->mVertices[v].z };
+                vertex.position *= settings.scale; // Do this separate from transform as we don't want to scale normals
+
                 if (mesh->HasNormals())
                 {
-                    normal = { mesh->mNormals[v].x, mesh->mNormals[v].y, mesh->mNormals[v].z };
-                    //normal = recursiveTransform * glm::vec4(normal, 1.0f);
+                    vertex.normal = { mesh->mNormals[v].x, mesh->mNormals[v].y, mesh->mNormals[v].z };
                 }
 
-                glm::vec4 color{};
+                if (mesh->HasTangentsAndBitangents())
+                {
+                    vertex.tangent = { mesh->mTangents[v].x, mesh->mTangents[v].y, mesh->mTangents[v].z };
+                    vertex.bitangent = { mesh->mBitangents[v].x, mesh->mBitangents[v].y, mesh->mBitangents[v].z };
+                }
+
                 if (mesh->HasVertexColors(0))
                 {
-                    color = { mesh->mColors[0][v].r, mesh->mColors[0][v].g, mesh->mColors[0][v].b, mesh->mColors[0][v].a };
+                    vertex.color = { mesh->mColors[0][v].r, mesh->mColors[0][v].g, mesh->mColors[0][v].b, mesh->mColors[0][v].a };
                 }
 
-                glm::vec2 uv{};
                 if (mesh->HasTextureCoords(0))
                 {
-                    uv = { mesh->mTextureCoords[0][v].x, mesh->mTextureCoords[0][v].y };
+                    vertex.uv = { mesh->mTextureCoords[0][v].x, mesh->mTextureCoords[0][v].y };
                 }
-
-                // Use default bone weights as it will be replaced below
-                outMesh.vertices.emplace_back(position, normal, color, uv, glm::ivec4{ -1, -1, -1, -1 }, glm::vec4{});
             }
 
             // More efficient to do this separately instead of looping bones for each vertex
@@ -391,7 +491,7 @@ namespace TombForge
                 outMesh.indices.emplace_back(mesh->mFaces[e].mIndices[2]);
             }
 
-            // Materials
+            CalculateBoundingBox(outMesh);
 
             outMesh.material = std::make_shared<Material>();
             FillMaterial(scene, mesh, *outMesh.material, outBaseName, basePath);
@@ -499,8 +599,9 @@ namespace TombForge
         const aiScene* scene = importer.ReadFile(path, 
             aiProcess_Triangulate 
             | aiProcess_FlipUVs 
-            | aiProcess_PopulateArmatureData 
-            | aiProcess_EmbedTextures);
+            | aiProcess_PopulateArmatureData
+            | aiProcess_CalcTangentSpace);
+
         if (!scene)
         {
             LOG_ERROR("Failed to load %s", path);
@@ -557,6 +658,7 @@ namespace TombForge
 
             glm::mat4 transformMatrix{ 1.0f };
             ProcessMesh(scene, scene->mRootNode, basePath, baseName, result.model->meshes, settings.modelPath, result.skeleton.get(), settings, transformMatrix);
+            CalculateBoundingBox(*result.model);
         }
 
         if (m_contains.hasAnimation && settings.importAnimation)

@@ -1,15 +1,13 @@
 #version 460 core
 out vec4 FragColor;
 
+in mat3 TBN;
 in vec4 Color;
 in vec3 Normal;
 in vec3 FragPos;
 in vec2 TexCoords;
 
 #define MAX_NUMBER_OF_LIGHT_INDICES 8
-#define POINT_LIGHT 0
-#define DIRECTIONAL_LIGHT 1
-#define SPOT_LIGHT 2
 
 struct DirLight
 {
@@ -29,41 +27,37 @@ struct PointLight
 
 uniform DirLight dirLight;
 uniform int lightIndices[MAX_NUMBER_OF_LIGHT_INDICES];
-uniform int numLights;
-uniform int numDirLights;
-
+uniform int numLights; // Specific to the mesh being rendered
 uniform float ambientStrength;
 uniform vec3 ambientColor;
 
-uniform sampler2D diffuseTexture;
-uniform sampler2D normalTexture;
-uniform sampler2D lightsTexture;
+layout(binding = 0) uniform sampler2D diffuseTexture;
+layout(binding = 1) uniform sampler2D normalTexture;
+layout(binding = 2) uniform sampler2D lightsTexture; // Each light takes up 9 texels (point lights only)
 
-vec4 ProcessPointLight(int index);
-vec4 ProcessPointLight(PointLight instance); // Deprecated
-vec4 ProcessDirLight(DirLight instance);
+vec4 ProcessPointLight(int index, vec3 normal);
+vec4 ProcessDirLight(DirLight instance, vec3 normal);
 
 void main()
 {
-	vec4 textureColor = texture(diffuseTexture, TexCoords);
+	vec3 normal = texture(normalTexture, TexCoords).rgb;
+	normal.g = 1.0 - normal.g;
+	normal = normal * 2.0 - 1.0;   
+	normal = normalize(TBN * normal);
 
-	vec4 ambient = vec4(ambientStrength * ambientColor, 1.0);
-
-	vec4 result = vec4(0.0, 0.0, 0.0, 1.0);
+	vec4 lights = vec4(0.0, 0.0, 0.0, 1.0);
 	for (int i = 0; i < numLights; i++)
 	{
-		result += ProcessPointLight(lightIndices[i]);
+		lights += ProcessPointLight(lightIndices[i], normal);
 	}
+	lights += ProcessDirLight(dirLight, normal);
 
-	if (numDirLights == 1)
-	{
-		result += ProcessDirLight(dirLight);
-	}
-
-	FragColor = (ambient + result) * textureColor;
+	vec4 textureColor = texture(diffuseTexture, TexCoords);
+	vec4 ambient = vec4(ambientStrength * ambientColor, 1.0);
+	FragColor = (ambient + lights) * textureColor;
 }
 
-vec4 ProcessPointLight(int index)
+vec4 ProcessPointLight(int index, vec3 normal)
 {
 	PointLight instance;
 	instance.position.x = float(texelFetch(lightsTexture, ivec2(index * 9, 0), 0).r);
@@ -81,56 +75,25 @@ vec4 ProcessPointLight(int index)
 	float lightStrength = instance.strength;
 	if (absDistance > instance.innerRadius)
 	{
+		// todo: remove conditional
 		float falloff = absDistance - instance.innerRadius + 1.0;
 		float attenuation = 1.0 / (falloff * falloff);
 		lightStrength = attenuation * instance.strength;
 	}
 
-	// Diffuse component
 	vec3 lightDir = normalize(instance.position - FragPos);
-	vec3 norm = normalize(Normal);
-
-	float diffuseStrength = max(dot(lightDir, norm), 0.0) * lightStrength;
-	vec4 diffuse = vec4(diffuseStrength * instance.color, 1.0);
-
-	return diffuse;
+	float diffuseStrength = max(dot(lightDir, normal), 0.0) * lightStrength;
+	return vec4(diffuseStrength * instance.color, 1.0);
 }
 
-vec4 ProcessPointLight(PointLight instance)
-{
-	float absDistance = distance(FragPos, instance.position);
-
-	float lightStrength;
-	if (absDistance < instance.innerRadius)
-	{
-		lightStrength = 1.0;
-	}
-	else
-	{
-		lightStrength = max(mix(1.0, 0.0, (absDistance - instance.innerRadius) / (instance.outerRadius - instance.innerRadius)), 0.0) * instance.strength;
-	}
-
-	// Diffuse component
-	vec3 lightDir = normalize(instance.position - FragPos);
-	vec3 norm = normalize(Normal);
-
-	float diffuseStrength = max(dot(lightDir, norm), 0.0) * lightStrength;
-	vec4 diffuse = vec4(diffuseStrength * instance.color, 1.0);
-
-	return diffuse;
-}
-
-vec4 ProcessDirLight(DirLight instance)
+vec4 ProcessDirLight(DirLight instance, vec3 normal)
 {
 	float lightStrength = instance.strength;
 
-	// Diffuse component
 	vec3 lightDir = normalize(-instance.direction);
-	vec3 norm = normalize(Normal);
-
-	float diffuseStrength = max(dot(lightDir, norm), 0.0) * lightStrength;
+	float diffuseStrength = max(dot(lightDir, normal), 0.0) * lightStrength;
 	vec4 diffuse = vec4(diffuseStrength * instance.color, 1.0);
 
-	return diffuse;
+	return max(diffuse, vec4(0.0, 0.0, 0.0, 0.0));
 }
 

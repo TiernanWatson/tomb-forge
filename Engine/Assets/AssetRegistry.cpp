@@ -218,7 +218,6 @@ namespace TombForge
     std::shared_ptr<Model> AssetRegistry::LoadAsset(const AssetMeta& meta)
     {
         const std::string absPath = GetAbsolutePath(meta.assetPath);
-
         std::ifstream inFile(absPath, std::ios::binary);
 
         if (inFile.is_open())
@@ -227,7 +226,6 @@ namespace TombForge
 
             size_t numMeshes{};
             inFile.read((char*)&numMeshes, sizeof(size_t));
-
             resource->meshes.resize(numMeshes);
 
             for (size_t i = 0; i < numMeshes; i++)
@@ -236,44 +234,37 @@ namespace TombForge
 
                 size_t nameSize{};
                 inFile.read((char*)&nameSize, sizeof(size_t));
-
                 mesh.name.resize(nameSize);
                 inFile.read(mesh.name.data(), sizeof(char) * nameSize);
 
                 size_t numVertices{};
                 inFile.read((char*)&numVertices, sizeof(size_t));
-
                 mesh.vertices.resize(numVertices);
-
-                inFile.read((char*)mesh.vertices.data(), numVertices * sizeof(decltype(mesh.vertices)::value_type));
+                inFile.read((char*)mesh.vertices.data(), numVertices * sizeof(Vertex));
 
                 size_t numIndices{};
                 inFile.read((char*)&numIndices, sizeof(size_t));
-
                 mesh.indices.resize(numIndices);
-
                 inFile.read((char*)mesh.indices.data(), numIndices * sizeof(uint32_t));
+
+                inFile.read((char*)&mesh.bounds, sizeof(AABB));
 
                 bool hasMaterial{};
                 inFile.read((char*)&hasMaterial, sizeof(bool));
-
                 if (hasMaterial)
                 {
                     AssetId materialName{};
                     inFile.read((char*)&materialName, sizeof(size_t));
-
                     mesh.material = Load<Material>(materialName);
                 }
             }
 
             bool hasSkeleton{};
             inFile.read((char*)&hasSkeleton, sizeof(bool));
-
             if (hasSkeleton)
             {
                 AssetId skelId{};
                 inFile.read((char*)&skelId, sizeof(size_t));
-
                 resource->skeleton = Load<Skeleton>(skelId);
             }
 
@@ -305,15 +296,16 @@ namespace TombForge
 
                 const size_t numVertices = mesh.vertices.size();
                 outFile.write((const char*)&numVertices, sizeof(size_t));
-                outFile.write((const char*)mesh.vertices.data(), numVertices * sizeof(decltype(mesh.vertices)::value_type));
+                outFile.write((const char*)mesh.vertices.data(), numVertices * sizeof(Vertex));
 
                 const size_t numIndices = mesh.indices.size();
                 outFile.write((const char*)&numIndices, sizeof(size_t));
                 outFile.write((const char*)mesh.indices.data(), numIndices * sizeof(uint32_t));
 
+                outFile.write((const char*)&mesh.bounds, sizeof(AABB));
+
                 const bool hasMaterial = mesh.material != nullptr;
                 outFile.write((const char*)&hasMaterial, sizeof(bool));
-
                 if (hasMaterial)
                 {
                     outFile.write((const char*)&mesh.material->id, sizeof(size_t));
@@ -322,7 +314,6 @@ namespace TombForge
 
             const bool hasSkeleton = asset.skeleton != nullptr;
             outFile.write((const char*)&hasSkeleton, sizeof(bool));
-
             if (hasSkeleton)
             {
                 outFile.write((const char*)&asset.skeleton->id, sizeof(size_t));
@@ -433,11 +424,13 @@ namespace TombForge
                 * resource->width
                 * resource->height;
             resource->data.resize(dataSize);
-
             inFile.read((char*)resource->data.data(), dataSize);
 
-            inFile.close();
+            inFile.read((char*)&resource->filter, sizeof(TextureFilter));
+            inFile.read((char*)&resource->type, sizeof(TextureDataType));
+            inFile.read((char*)&resource->sRGB, sizeof(bool));
 
+            inFile.close();
             return resource;
         }
 
@@ -447,28 +440,26 @@ namespace TombForge
     template<>
     void AssetRegistry::WriteAsset(const Texture& asset, const AssetMeta& meta) const
     {
-        const std::string name = GetAbsolutePath(meta.assetPath);
-
         if (!asset.IsValidData())
         {
             LOG_ERROR("Tried to save texture %s, but invalid data");
             return;
         }
 
-        const std::string& filePath = name;
-
+        const std::string filePath = GetAbsolutePath(meta.assetPath);
         std::ofstream outFile(filePath, std::ios::binary);
-
         if (outFile.is_open())
         {
             outFile.write((const char*)&asset.format, sizeof(TextureFormat));
             outFile.write((const char*)&asset.width, sizeof(uint32_t));
             outFile.write((const char*)&asset.height, sizeof(uint32_t));
             outFile.write((const char*)asset.data.data(), sizeof(ColorByte) * asset.data.size());
+            outFile.write((const char*)&asset.filter, sizeof(TextureFilter));
+            outFile.write((const char*)&asset.type, sizeof(TextureDataType));
+            outFile.write((const char*)&asset.sRGB, sizeof(bool));
 
             outFile.flush();
             outFile.close();
-
             return;
         }
 
@@ -675,7 +666,7 @@ namespace TombForge
 
             for (const auto& item : json["meshes"])
             {
-                MeshInstance instance{};
+                auto& instance = result->meshes.emplace_back();
                 instance.name = item["name"].get<std::string>();
                 instance.model = item["model"].get<AssetId>();
                 instance.mesh = item["mesh"].get<AssetId>();
@@ -683,7 +674,11 @@ namespace TombForge
                 instance.transform.position = glm::vec3{ transform[0], transform[1], transform[2] };
                 instance.transform.rotation = glm::quat{ transform[3], transform[4], transform[5], transform[6] };
                 instance.transform.scale = glm::vec3{ transform[7], transform[8], transform[9] };
-                result->meshes.push_back(instance);
+                if (item.contains("overrideMaterial"))
+                {
+                    const AssetId materialId = item["overrideMaterial"].get<AssetId>();
+                    instance.overrideMaterial = Load<Material>(materialId);
+                }
             }
 
             for (const auto& item : json["pointLights"])
@@ -754,6 +749,10 @@ namespace TombForge
                 obj.transform.rotation.w, obj.transform.rotation.x, obj.transform.rotation.y, obj.transform.rotation.z,
                 obj.transform.scale.x, obj.transform.scale.y, obj.transform.scale.z
             };
+            if (obj.overrideMaterial)
+            {
+                json["meshes"][i]["overrideMaterial"] = obj.overrideMaterial->id;
+            }
         }
 
         for (size_t i = 0; i < asset.pointLights.size(); i++)

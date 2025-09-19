@@ -305,9 +305,19 @@ namespace TombForge
                 {
                     glm::vec3 pos{ mesh.X[i], mesh.Y[i], mesh.Z[i] };
                     glm::vec3 nor{};
+                    glm::vec3 bitan{};
+                    glm::vec3 tan{};
                     if (mesh.Xn.size() == mesh.X.size())
                     {
                         nor = { mesh.Xn[i], mesh.Yn[i], mesh.Zn[i] };
+                    }
+                    if (mesh.Xtg.size() == mesh.X.size())
+                    {
+                        tan = { mesh.Xtg[i], mesh.Ytg[i], mesh.Ztg[i] };
+                    }
+                    if (mesh.Xbn.size() == mesh.X.size())
+                    {
+                        bitan = { mesh.Xbn[i], mesh.Ybn[i], mesh.Zbn[i] };
                     }
                     glm::vec4 col{};
                     if (mesh.R.size() == mesh.X.size())
@@ -320,7 +330,7 @@ namespace TombForge
                         uv = { mesh.U1[i], 1.0f - mesh.V1[i] };
                     }
 
-                    meshIn.vertices.emplace_back(pos, nor, col, uv);
+                    meshIn.vertices.emplace_back(pos, nor, tan, bitan, col, uv);
                 }
 
                 // Transform vertices

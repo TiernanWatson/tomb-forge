@@ -145,6 +145,7 @@
     <ClCompile Include="Core\Debug.cpp" />
     <ClCompile Include="Core\Graphics\AABB.cpp" />
     <ClCompile Include="Core\Graphics\Frustum.cpp" />
+    <ClCompile Include="Core\Graphics\Triangle.cpp" />
     <ClCompile Include="Engine\Assets\AssetId.cpp" />
     <ClCompile Include="Engine\Audio\Audio.cpp" />
     <ClCompile Include="Engine\Audio\AudioSystem.cpp" />
@@ -196,6 +197,7 @@
     <ClInclude Include="Core\Graphics\Color.h" />
     <ClInclude Include="Core\Graphics\Frustum.h" />
     <ClInclude Include="Core\Graphics\Line.h" />
+    <ClInclude Include="Core\Graphics\Triangle.h" />
     <ClInclude Include="Core\IO\BinaryReader.h" />
     <ClInclude Include="Core\IO\BinaryWriter.h" />
     <ClInclude Include="Engine\Audio\Audio.h" />

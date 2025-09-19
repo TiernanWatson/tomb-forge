@@ -124,6 +124,11 @@ namespace TombForge
                 this->HandleScroll(scroll);
             });
 
+        Input::RegisterMouseButtonCallback([this](int button, int action, int mods)
+            {
+                this->HandleMouseButton(button, action, mods);
+            });
+
         m_ctx.physicsInterface.SetDebugRenderer(m_physicsDebugRenderer);
 
         m_ctx.isFreeCamera = true;
@@ -148,13 +153,13 @@ namespace TombForge
 
         ImGui::NewFrame();
 
+        DrawDebugShapes();
+
         if (m_isEditMode)
         {
             DrawGizmos();
             DrawEditorUI();
         }
-
-        DrawDebugShapes();
 
         glDisable(GL_FRAMEBUFFER_SRGB); // ImGui does not use linear space
         ImGui::Render();
@@ -173,9 +178,9 @@ namespace TombForge
 
         auto& level = *m_ctx.level;
 
-        if (m_selectedMesh < level.meshes.size())
+        if (m_selectedObject < level.meshes.size())
         {
-            auto& mesh = level.meshes[m_selectedMesh];
+            auto& mesh = level.meshes[m_selectedObject];
 
             for (size_t l = 0; l < level.pointLights.size(); l++)
             {
@@ -194,7 +199,7 @@ namespace TombForge
                 }
             }
 
-            Graphics::Get().ClearDepthBuffer(); // Keep gizmos on top of everything
+            Graphics::Get().SetDepthTest(false); // Keep gizmos on top of everything
 
             Transform& objTransform = mesh.transform;
             const glm::vec3 position = objTransform.position;
@@ -225,6 +230,8 @@ namespace TombForge
             DrawConeArrow(xTransform.AsMatrix(), glm::vec4{ 1.0f, 0, 0, 1.0f });
             DrawConeArrow(yTransform.AsMatrix(), glm::vec4{ 0, 1.0f, 0, 1.0f });
             DrawConeArrow(zTransform.AsMatrix(), glm::vec4{ 0, 0, 1.0f, 1.0f });
+
+            Graphics::Get().SetDepthTest(true);
         }
     }
 
@@ -261,22 +268,13 @@ namespace TombForge
                     shape->Draw(m_physicsDebugRenderer, bodies.GetCenterOfMassTransform(obj.rigidbody), JPH::Vec3{ 1.0f, 1.0f, 1.0f }, JPH::Color{ 0,255,0,255 }, false, true);
                 }
             }
-
-            m_physicsDebugRenderer->SubmitLines(
-                m_ctx.camera.transform, 
-                m_ctx.camera.fovY, 
-                m_ctx.camera.aspect, 
-                m_ctx.camera.near, 
-                m_ctx.camera.far);
-
-            m_physicsDebugRenderer->ClearLines();
         }
 
-        if (m_showMeshWireframe)
+        if (m_showMeshWireframe || m_drawNormals)
         {
-            if (m_ctx.level->meshes.size() > 0 && m_selectedMesh < m_ctx.level->meshes.size())
+            if (m_ctx.level->meshes.size() > 0 && m_selectedObject < m_ctx.level->meshes.size())
             {
-                auto& obj = m_ctx.level->meshes[m_selectedMesh];
+                auto& obj = m_ctx.level->meshes[m_selectedObject];
                 auto& mesh = m_ctx.level->models[obj.model]->meshes[obj.mesh];
                 m_ctx.renderer->RenderWireframe(mesh, obj.transform, m_ctx.camera);
             }
@@ -286,14 +284,52 @@ namespace TombForge
         {
             m_ctx.renderer->DrawOctree(glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f }, m_ctx.camera);
 
-            if (m_selectedMesh < m_ctx.level->meshes.size())
+            if (m_selectedObject < m_ctx.level->meshes.size())
             {
                 m_ctx.renderer->DrawBox(
-                    m_ctx.level->meshes[m_selectedMesh].bounds,
+                    m_ctx.level->meshes[m_selectedObject].bounds,
                     glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f },
                     m_ctx.camera);
             }
         }
+
+        if (m_drawNormals)
+        {
+            if (m_ctx.level->meshes.size() > 0 && m_selectedObject < m_ctx.level->meshes.size())
+            {
+                auto& obj = m_ctx.level->meshes[m_selectedObject];
+                auto& mesh = m_ctx.level->models[obj.model]->meshes[obj.mesh];
+
+                m_ctx.renderer->DrawBox(
+                    mesh.bounds,
+                    glm::vec4{ 0.5f, 0.5f, 1.0f, 1.0f },
+                    m_ctx.camera);
+
+                for (Vertex& v : mesh.vertices)
+                {
+                    glm::vec3 start = obj.transform.position + (obj.transform.rotation * (v.position * obj.transform.scale));
+                    glm::vec3 end = start + (obj.transform.rotation * (v.normal * 0.1f));
+                    m_physicsDebugRenderer->DrawColoredLine( start, end, glm::vec4{ 0.0f, 0.0f, 1.0f, 1.0f } );
+
+                    start = obj.transform.position + (obj.transform.rotation * (v.position * obj.transform.scale));
+                    end = start + (obj.transform.rotation * (v.tangent * 0.1f));
+                    m_physicsDebugRenderer->DrawColoredLine(start, end, glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f });
+
+                    start = obj.transform.position + (obj.transform.rotation * (v.position * obj.transform.scale));
+                    end = start + (obj.transform.rotation * (v.bitangent * 0.1f));
+                    m_physicsDebugRenderer->DrawColoredLine(start, end, glm::vec4{ 0.0f, 1.0f, 0.0f, 1.0f });
+                }
+            }
+        }
+
+        m_physicsDebugRenderer->SubmitLines(
+            m_ctx.camera.transform,
+            m_ctx.camera.fovY,
+            m_ctx.camera.aspect,
+            m_ctx.camera.near,
+            m_ctx.camera.far);
+
+        m_physicsDebugRenderer->ClearLines();
     }
 
     void Editor::DrawConeArrow(const glm::mat4& transform, glm::vec4 color)
@@ -535,7 +571,7 @@ namespace TombForge
                     if (!filePath.empty())
                     {
                         m_material = m_ctx.assetRegistry.Load<Material>(filePath);
-                        m_showMaterialEditor = true;
+                        m_showMaterialEditor = m_material != nullptr;
                     }
                 }
                 if (ImGui::MenuItem("Edit Animation"))
@@ -554,6 +590,36 @@ namespace TombForge
                     {
                         m_model = m_ctx.assetRegistry.Load<Model>(filePath);
                         m_showModelWindow = m_model != nullptr;
+                    }
+                }
+                if (ImGui::MenuItem("Edit Texture"))
+                {
+                    const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        m_texture = m_ctx.assetRegistry.Load<Texture>(filePath);
+                        m_showTextureWindow = m_texture != nullptr;
+                    }
+                }
+                ImGui::Separator();
+                if (ImGui::MenuItem("New Material"))
+                {
+                    const std::string filePath = SaveFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        m_material = std::make_shared<Material>();
+                        m_ctx.assetRegistry.AddAsset<Material>(m_material, filePath, "");
+                        if (m_material->IsValid())
+                        {
+                            m_showMaterialEditor = true;
+                            m_ctx.assetRegistry.Save();
+                        }
+                        else
+                        {
+                            LOG_WARNING("Could not create material %s", filePath.c_str());
+                            m_material = nullptr;
+                            m_showMaterialEditor = false;
+                        }
                     }
                 }
                 if (m_ctx.level)
@@ -575,11 +641,11 @@ namespace TombForge
                                 for (size_t i = 0; i < model->meshes.size(); i++)
                                 {
                                     auto& instance = m_ctx.level->meshes.emplace_back();
+                                    instance.name = model->meshes[i].name;
                                     instance.model = m_ctx.level->models.size() - 1;
                                     instance.mesh = static_cast<uint32_t>(i);
                                     instance.bounds = model->meshes[i].bounds;
                                     instance.modelMatrix = instance.transform.AsMatrix();
-                                    instance.transform = instance.transform;
                                     const glm::vec3 lightReferencePosition = (instance.bounds.min + instance.bounds.max) / 2.0f;
                                     GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights);
                                 }
@@ -601,9 +667,8 @@ namespace TombForge
                         obj.name = "Cube";
                         obj.model = m_ctx.level->models.size() - 1;
                         obj.mesh = 0;
-
-                        UpdateBounds(*m_ctx.level, obj);
-
+                        obj.bounds = cubeModel->meshes[0].bounds;
+                        obj.modelMatrix = obj.transform.AsMatrix();
                         m_ctx.renderer->InitializeLevel(*m_ctx.level);
                     }
                 }
@@ -662,6 +727,11 @@ namespace TombForge
         if (m_showLevelWindow)
         {
             DrawLevelWindow();
+        }
+
+        if (m_showTextureWindow)
+        {
+            DrawTextureWindow();
         }
 
         // Inspector
@@ -737,6 +807,30 @@ namespace TombForge
                     else
                     {
                         m_material->RemoveFlag(MATERIAL_FLAG_DIFFUSE);
+                    }
+                }
+            }
+            if (m_material->normal)
+            {
+                ImGui::Text("Normal: %s", m_material->normal->name.c_str());
+            }
+            else
+            {
+                ImGui::Text("Normal: Null");
+            }
+            if (ImGui::Button("Set Normal"))
+            {
+                const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                if (!texturePath.empty())
+                {
+                    m_material->normal = m_ctx.assetRegistry.Load<Texture>(texturePath);
+                    if (m_material->normal)
+                    {
+                        m_material->AddFlag(MATERIAL_FLAG_NORMAL);
+                    }
+                    else
+                    {
+                        m_material->RemoveFlag(MATERIAL_FLAG_NORMAL);
                     }
                 }
             }
@@ -907,19 +1001,19 @@ namespace TombForge
                     {
                         ImGui::PushID(i);
                         auto& staticObj = m_ctx.level->meshes[i];
-                        bool selected = i == selectedObject;
+                        bool selected = i == m_selectedObject;
                         auto& mesh = m_ctx.level->models[staticObj.model]->meshes[staticObj.mesh];
                         const char* name = staticObj.name.size() > 0 ? staticObj.name.c_str() : "#UNNAMED!";
                         if (ImGui::Selectable(name, &selected))
                         {
-                            if (selectedObject == i)
+                            if (m_selectedObject == i)
                             {
                                 s_eulerRotation = {};
-                                selectedObject = std::numeric_limits<size_t>::max();
+                                m_selectedObject = std::numeric_limits<size_t>::max();
                             }
                             else
                             {
-                                selectedObject = i;
+                                m_selectedObject = i;
                                 s_eulerRotation = staticObj.transform.EulerRotation();
                             }
                         }
@@ -928,9 +1022,9 @@ namespace TombForge
                     ImGui::EndListBox();
                 }
                 ImGui::SeparatorText("Details");
-                if (selectedObject < m_ctx.level->meshes.size())
+                if (m_selectedObject < m_ctx.level->meshes.size())
                 {
-                    MeshInstance& obj = m_ctx.level->meshes[selectedObject];
+                    auto& obj = m_ctx.level->meshes[m_selectedObject];
                     ImGui::InputText("Name", &obj.name);
                     bool transformUpdated = false;
                     transformUpdated |= ImGui::InputFloat3("Position", &obj.transform.position.x);
@@ -942,14 +1036,28 @@ namespace TombForge
                     transformUpdated |= ImGui::InputFloat3("Scale", &obj.transform.scale.x);
                     if (transformUpdated)
                     {
-                        OnObjectTransformUpdate(selectedObject);
+                        OnObjectTransformUpdate(m_selectedObject);
                     }
-                    ImGui::SeparatorText("Mesh");
+                    ImGui::SeparatorText("Mesh Asset");
                     auto& mesh = m_ctx.level->models[obj.model]->meshes[obj.mesh];
                     ImGui::Text("Mesh: %s", mesh.name.c_str());
-                    if (obj.mesh)
+                    ImGui::Text("Material Name: %s", obj.overrideMaterial ? obj.overrideMaterial->name.c_str() : mesh.material->name.c_str());
+                    if (ImGui::Button("Set Material"))
                     {
-                        ImGui::Text("Material Name: %s", mesh.material->name.c_str());
+                        const std::string materialPath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                        if (!materialPath.empty())
+                        {
+                            if (auto material = m_ctx.assetRegistry.Load<Material>(materialPath); material)
+                            {
+                                obj.overrideMaterial = material;
+                                m_ctx.renderer->InitializeLevel(*m_ctx.level);
+                            }
+                        }
+                    }
+                    if (obj.overrideMaterial && ImGui::Button("Clear Override"))
+                    {
+                        obj.overrideMaterial = nullptr;
+                        m_ctx.renderer->InitializeLevel(*m_ctx.level);
                     }
                     ImGui::SeparatorText("Lights");
                     ImGui::Text("%i, %i, %i, %i, %i, %i, %i, %i",
@@ -963,7 +1071,7 @@ namespace TombForge
                         obj.lights[7]);
                     if (ImGui::Button("Delete Object"))
                     {
-                        DeleteLevelObject(m_ctx, selectedObject);
+                        DeleteLevelObject(m_ctx, m_selectedObject);
                     }
                 }
             }
@@ -975,10 +1083,10 @@ namespace TombForge
             {
                 for (size_t l = 0; l < m_ctx.level->pointLights.size(); l++)
                 {
-                    if (selectedObject < m_ctx.level->meshes.size())
+                    if (m_selectedObject < m_ctx.level->meshes.size())
                     {
                         bool found = false;
-                        for (auto& light : m_ctx.level->meshes[selectedObject].lights)
+                        for (auto& light : m_ctx.level->meshes[m_selectedObject].lights)
                         {
                             if (light == l)
                             {
@@ -992,23 +1100,38 @@ namespace TombForge
                         }
                     }
 
-                    bool selected = selectedPointLight == l;
+                    bool selected = m_selectedPointLight == l;
                     if (ImGui::Selectable(std::to_string(l).c_str(), &selected))
                     {
-                        selectedPointLight = l;
+                        m_selectedPointLight = l;
                     }
                 }
                 ImGui::EndListBox();
             }
 
-            if (selectedPointLight < m_ctx.level->pointLights.size())
+            if (ImGui::Button("Add Light"))
             {
-                auto& light = m_ctx.level->pointLights[selectedPointLight];
-                ImGui::InputFloat3("Position", &light.position.x);
-                ImGui::InputFloat3("Color", &light.color.r);
-                ImGui::InputFloat("Intensity", &light.intensity);
-                ImGui::InputFloat("Inner Radius", &light.innerRadius);
-                ImGui::InputFloat("Outer Radius", &light.outerRadius);
+                PointLight& light = m_ctx.level->pointLights.emplace_back();
+                light.color = glm::vec3(1.0f, 1.0f, 1.0f);
+                light.intensity = 1.0f;
+                light.innerRadius = 1.0f;
+                light.outerRadius = 5.0f;
+            }
+
+            if (m_selectedPointLight < m_ctx.level->pointLights.size())
+            {
+                bool modified = false;
+                auto& light = m_ctx.level->pointLights[m_selectedPointLight];
+                modified |= ImGui::InputFloat3("Position", &light.position.x);
+                modified |= ImGui::InputFloat3("Color", &light.color.r);
+                modified |= ImGui::InputFloat("Intensity", &light.intensity);
+                modified |= ImGui::InputFloat("Inner Radius", &light.innerRadius);
+                modified |= ImGui::InputFloat("Outer Radius", &light.outerRadius);
+                if (modified)
+                {
+                    UpdateAllClosestLights(*m_ctx.level);
+                    m_ctx.renderer->UpdateLights(*m_ctx.level);
+                }
             }
 
             ImGui::SeparatorText("Phong Settings");
@@ -1089,14 +1212,15 @@ namespace TombForge
                     basePath = FileIO::GetBasePath(basePath); // Don't want file
                 }
 
-                if (!basePath.empty() && (basePath[basePath.size() - 1] != '/' || basePath[basePath.size() - 1] != '\\'))
+                if (basePath[basePath.size() - 1] == '/')
                 {
-                    basePath.append("\\");
+                    basePath[basePath.size() - 1] = FileIO::Separator;
                 }
-            }
+                else if (basePath[basePath.size() - 1] != '\\')
+                {
+                    basePath.push_back(FileIO::Separator);
+                }
 
-            if (!basePath.empty())
-            {
                 for (auto& filePath : m_importPaths)
                 {
                     m_modelImporter.Start(filePath);
@@ -1143,9 +1267,15 @@ namespace TombForge
                                     continue;
                                 }
 
+                                // Save material before textures so they exist when material is loaded
                                 if (mesh.material->diffuse)
                                 {
                                     m_ctx.assetRegistry.AddAsset(mesh.material->diffuse, mesh.material->diffuse->name, filePath);
+                                }
+
+                                if (mesh.material->normal)
+                                {
+                                    m_ctx.assetRegistry.AddAsset(mesh.material->normal, mesh.material->normal->name, filePath);
                                 }
 
                                 m_ctx.assetRegistry.AddAsset(mesh.material, mesh.material->name, filePath);
@@ -1170,10 +1300,6 @@ namespace TombForge
                 m_showImportWindow = false;
 
                 m_ctx.assetRegistry.Save();
-            }
-            else
-            {
-                LOG_ERROR("Could not import to empty file path");
             }
         }
 
@@ -1447,6 +1573,33 @@ namespace TombForge
         ImGui::End();
     }
 
+    void Editor::DrawTextureWindow()
+    {
+        ImGui::SetNextWindowSize({ 400.0f, 400.0f }, ImGuiCond_FirstUseEver);
+        ImGui::Begin("Texture Editor", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+        if (!m_texture)
+        {
+            ImGui::Text("No texture opened");
+            ImGui::End();
+            return;
+        }
+        ImGui::Text("Name: %s", m_texture->name.c_str());
+        ImGui::Text("Dimensions: %ix%i", m_texture->width, m_texture->height);
+        ImGui::Checkbox("sRGB", &m_texture->sRGB);
+        ImGui::Separator();
+        if (ImGui::Button("Save"))
+        {
+            m_ctx.assetRegistry.SaveAsset(m_texture);
+            ImGui::SameLine();
+        }
+        if (ImGui::Button("Close"))
+        {
+            m_texture = nullptr;
+            m_showTextureWindow = false;
+        }
+        ImGui::End();
+    }
+
     void Editor::NewProject(const std::string& path)
     {
         UnloadProject();
@@ -1597,6 +1750,64 @@ namespace TombForge
             else if (key == GLFW_KEY_F7)
             {
                 m_ctx.wantsFrameAdvance = true;
+            }
+            else if (key == GLFW_KEY_F8)
+            {
+                m_drawNormals = !m_drawNormals;
+            }
+        }
+    }
+
+    void Editor::HandleMouseButton(int button, int action, int mods)
+    {
+        if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+        {
+            if (m_isEditMode && !ImGui::GetIO().WantCaptureMouse && m_ctx.level)
+            {
+                const float mouseX = (2.0f * m_ctx.mouseX) / m_ctx.windowWidth - 1.0f;
+                const float mouseY = 1.0f - (2.0f * m_ctx.mouseY) / m_ctx.windowHeight;
+                const float mouseZ = -1.0f; // Near plane
+
+                const glm::vec4 ndc{ mouseX, mouseY, mouseZ, 1.0f };
+                const glm::mat4 view = glm::inverse(m_ctx.camera.transform.AsMatrix());
+                const glm::mat4 projection = glm::perspective(m_ctx.camera.fovY, m_ctx.camera.aspect, m_ctx.camera.near, m_ctx.camera.far);
+                const glm::mat4 invVP = glm::inverse(projection * view);
+
+                glm::vec4 worldMouse = invVP * ndc;
+                worldMouse /= worldMouse.w;
+
+                const glm::vec3 rayDirection = glm::normalize(glm::vec3(worldMouse) - m_ctx.camera.transform.position);
+
+                float closestIndex = std::numeric_limits<float>::max();
+                size_t closestObject = std::numeric_limits<size_t>::max();
+                for (size_t i = 0; i < m_ctx.level->meshes.size(); i++)
+                {
+                    auto& obj = m_ctx.level->meshes[i];
+                    m_physicsDebugRenderer->DrawColoredLine(m_ctx.camera.transform.position, rayDirection, glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f }, 30.0f);
+                    if (RayIntersectsAABB(obj.bounds, m_ctx.camera.transform.position, rayDirection))
+                    {
+                        if (IsPointInAABB(obj.bounds, m_ctx.camera.transform.position))
+                        {
+                            continue; // Don't select if inside the object
+                        }
+
+                        float dist = glm::length(obj.transform.position - m_ctx.camera.transform.position);
+                        if (dist < closestIndex)
+                        {
+                            closestIndex = dist;
+                            closestObject = i;
+                        }
+                    }
+                }
+
+                if (m_selectedObject == closestObject || closestObject == std::numeric_limits<size_t>::max())
+                {
+                    m_selectedObject = std::numeric_limits<size_t>::max();
+                }
+                else
+                {
+                    m_selectedObject = closestObject;
+                }
             }
         }
     }

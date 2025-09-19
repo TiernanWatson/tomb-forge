@@ -1,11 +1,14 @@
 #version 460 core
 layout (location = 0) in vec3 aPosition;
 layout (location = 1) in vec3 aNormal;
-layout (location = 2) in vec4 aColor;
-layout (location = 3) in vec2 aUv;
-layout (location = 4) in ivec4 aBoneIds; 
-layout (location = 5) in vec4 aWeights;
+layout (location = 2) in vec3 aTangent;
+layout (location = 3) in vec3 aBitangent;
+layout (location = 4) in vec4 aColor;
+layout (location = 5) in vec2 aUv;
+layout (location = 6) in ivec4 aBoneIds; 
+layout (location = 7) in vec4 aWeights;
 
+out mat3 TBN;
 out vec4 Color;
 out vec3 Normal;
 out vec3 FragPos;
@@ -27,7 +30,10 @@ void main()
 
 	vec4 resultPosition = vec4(0.0f);
 	vec3 resultNormal = vec3(0.0f);
+	vec3 resultTangent = vec3(0.0f);
+	vec3 resultBitangent = vec3(0.0f);
 
+	// todo: remove the conditional with always valid weights/data
 	bool wasSkinned = false;
 
 	// Perform skinning
@@ -42,11 +48,10 @@ void main()
 			continue;
 		}
 
-		vec4 partialPosition = finalBonesMatrices[boneId] * basePosition;
-		resultPosition += weight * partialPosition;
-
-		vec3 partialNormal = mat3(finalBonesMatrices[boneId]) * aNormal;
-		resultNormal += weight * partialNormal;
+		resultPosition += weight * finalBonesMatrices[boneId] * basePosition;
+		resultNormal += weight * mat3(finalBonesMatrices[boneId]) * aNormal;
+		resultTangent += weight * mat3(finalBonesMatrices[boneId]) * aTangent;
+		resultBitangent += weight * mat3(finalBonesMatrices[boneId]) * aBitangent;
 
 		wasSkinned = true;
 	}
@@ -56,11 +61,18 @@ void main()
 	{
 		resultPosition = basePosition;
 		resultNormal = aNormal;
+		resultTangent = aTangent;
+		resultBitangent = aBitangent;
 	}
 
+	vec3 T = normalize(mat3(model) * resultTangent);
+	vec3 B = normalize(mat3(model) * resultBitangent);
+	vec3 N = normalize(mat3(model) * resultNormal);
+
+	TBN = mat3(T, B, N);
 	Color = aColor;
 	TexCoords = aUv;
-	Normal = mat3(model) * resultNormal;
+	Normal = N;
 	FragPos = vec3(model * resultPosition);
 
 	gl_Position = projection * view * model * resultPosition;

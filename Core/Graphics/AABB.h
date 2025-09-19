@@ -7,7 +7,6 @@ namespace TombForge
     struct AABB
     {
         glm::vec3 max{};
-
         glm::vec3 min{};
     };
 
@@ -25,4 +24,7 @@ namespace TombForge
 
     // Expands an AABB by joining it with another
     void AABBJoin(AABB& result, const AABB& swallow);
+
+    // Checks if a point is inside an the bounding box
+    bool IsPointInAABB(const AABB& aabb, const glm::vec3& point);
 }

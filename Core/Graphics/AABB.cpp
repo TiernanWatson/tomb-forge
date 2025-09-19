@@ -94,4 +94,14 @@ namespace TombForge
         result.min.y = Maths::Min(result.min.y, swallow.min.y);
         result.min.z = Maths::Min(result.min.z, swallow.min.z);
     }
+
+    bool IsPointInAABB(const AABB& aabb, const glm::vec3& point)
+    {
+        return point.x < aabb.max.x
+            && point.y < aabb.max.y
+            && point.z < aabb.max.z
+            && point.x > aabb.min.x
+            && point.y > aabb.min.y
+            && point.z > aabb.min.z;
+    }
 }

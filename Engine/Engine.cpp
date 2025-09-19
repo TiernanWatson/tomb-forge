@@ -1,5 +1,7 @@
 #include "Engine/Engine.h"
 
+#include <cmath>
+
 #include <glad/glad.h>
 #include <glfw3.h>
 #include <glm/glm.hpp>
@@ -32,13 +34,16 @@ namespace TombForge
 
         void HandleMouseMove(GLFWwindow* window, double x, double y)
         {
+            const float xf = static_cast<float>(x);
+            const float yf = static_cast<float>(y);
+
             if (EngineContext* ctx = reinterpret_cast<EngineContext*>(glfwGetWindowUserPointer(window)))
             {
-                ctx->mouseX = static_cast<float>(x);
-                ctx->mouseY = static_cast<float>(y);
+                ctx->mouseX = xf;
+                ctx->mouseY = yf;
             }
 
-            Input::HandleMouseMove(static_cast<float>(x), static_cast<float>(y));
+            Input::HandleMouseMove(xf, yf);
         }
 
         void HandleMouseScroll(GLFWwindow* window, double scrollX, double scrollY)
@@ -60,6 +65,12 @@ namespace TombForge
         {
             if (EngineContext* ctx = reinterpret_cast<EngineContext*>(glfwGetWindowUserPointer(window)))
             {
+                if (std::isnan(width) || std::isnan(height) || height == 0.0f)
+                {
+                    // This can come from minimizing the window
+                    return;
+                }
+
                 ctx->windowWidth = width;
                 ctx->windowHeight = height;
                 ctx->camera.aspect = static_cast<float>(width) / height;
@@ -76,13 +87,16 @@ namespace TombForge
 
             texture.data.resize(texture.width * texture.height * 4);
 
-            for (int w = 0; w < 1024; w++)
+            for (int w = 0; w < texture.width; w++)
             {
-                for (int h = 0; h < 1024; h++)
+                for (int h = 0; h < texture.height; h++)
                 {
-                    const size_t baseIndex = (w * 1024 * 4) + h * 4;
+                    const size_t baseIndex = (w * texture.width * 4) + h * 4;
 
-                    if (w < LineThickness || h < LineThickness || w >(1024 - LineThickness) || h >(1024 - LineThickness))
+                    if (w < LineThickness 
+                        || h < LineThickness 
+                        || w > (texture.width - LineThickness) 
+                        || h > (texture.height - LineThickness))
                     {
                         texture.data[baseIndex] = line.x;
                         texture.data[baseIndex + 1] = line.y;
@@ -535,9 +549,7 @@ namespace TombForge
         {
             ctx.renderer->InitializeLevel(*ctx.level);
             InitializeColliders(ctx);
-
             ctx.lara.transform.position = ctx.level->startPosition;
-            ctx.lara.previousTransform = ctx.lara.transform;
         }
         else
         {

@@ -283,27 +283,38 @@ namespace TombForge
     void AddFlatSurface(Mesh& mesh, const glm::vec3& topLeft, const glm::vec3& topRight, const glm::vec3& bottomLeft, const glm::vec3& bottomRight, const glm::vec3& normal,
         const glm::vec4& color)
     {
+        glm::vec3 tangent = normalize(topRight - topLeft);
+        glm::vec3 bitangent = normalize(topLeft - bottomLeft);
+
         Vertex topLeftV{};
         topLeftV.position = topLeft;
         topLeftV.normal = normal;
+        topLeftV.tangent = tangent;
+        topLeftV.bitangent = bitangent;
         topLeftV.color = color;
         topLeftV.uv = {};
 
         Vertex topRightV{};
         topRightV.position = topRight;
         topRightV.normal = normal;
+        topRightV.tangent = tangent;
+        topRightV.bitangent = bitangent;
         topRightV.color = color;
         topRightV.uv = { 1.0f, 0.0f };
 
         Vertex bottomLeftV{};
         bottomLeftV.position = bottomLeft;
         bottomLeftV.normal = normal;
+        bottomLeftV.tangent = tangent;
+        bottomLeftV.bitangent = bitangent;
         bottomLeftV.color = color;
         bottomLeftV.uv = { 0.0f, 1.0f };
 
         Vertex bottomRightV{};
         bottomRightV.position = bottomRight;
         bottomRightV.normal = normal;
+        bottomRightV.tangent = tangent;
+        bottomRightV.bitangent = bitangent;
         bottomRightV.color = color;
         bottomRightV.uv = { 1.0f, 1.0f };
 

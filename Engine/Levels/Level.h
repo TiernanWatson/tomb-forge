@@ -106,6 +106,7 @@ namespace TombForge
     struct MeshInstance
     {
         std::string name{};
+        std::shared_ptr<Material> overrideMaterial{}; // If set, overrides the mesh material
         Transform transform{};
         glm::mat4 modelMatrix{}; // World-space, only updated if moved
         MeshLightArray lights{};
@@ -158,5 +159,6 @@ namespace TombForge
     void UpdateBounds(const Level& level, MeshInstance& meshInstance);
     AABB CalculateLevelBounds(const Level& level);
     void GetClosestLights(const Level& level, const glm::vec3& position, MeshLightArray& result);
+    void UpdateAllClosestLights(Level& level);
     void InitializeCollider(MeshInstance& mesh, const glm::vec3& extents);
 }

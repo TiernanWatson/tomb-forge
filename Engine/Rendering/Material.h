@@ -4,8 +4,6 @@
 
 #include <cstdint>
 #include <memory>
-#include <vector>
-#include <string>
 
 #include "Engine/Rendering/Texture.h"
 #include "Engine/Rendering/Graphics.h"
@@ -26,21 +24,14 @@ namespace TombForge
     struct Material : public AssetBase
     {
         std::shared_ptr<Texture> diffuse{};
-
         std::shared_ptr<Texture> normal{};
-
         glm::vec4 baseColor{ 1.0f, 1.0f, 1.0f, 1.0f }; // Percentage range
-
         float roughness{};
-
         ShaderHandle shader{};
-
         MaterialFlags flags{};
 
         bool TestFlag(MaterialFlags flag) const;
-
         void AddFlag(MaterialFlags flag);
-
         void RemoveFlag(MaterialFlags flag);
     };
 }

@@ -62,6 +62,7 @@ namespace TombForge
         void DrawModelWindow();
         void DrawRegistryWindow();
         void DrawLevelWindow();
+        void DrawTextureWindow();
 
         void NewProject(const std::string& path);
         void LoadProject(const std::string& settingsPath);
@@ -73,6 +74,7 @@ namespace TombForge
         void OnLaraTransformUpdate();
 
         void HandleKey(int key, int scancode, int action, int mods);
+        void HandleMouseButton(int button, int action, int mods);
         void HandleScroll(float scroll);
 
         EngineContext& m_ctx;
@@ -90,10 +92,8 @@ namespace TombForge
 
         ProjectSettings m_project{};
 
-        size_t selectedObject{};
-        size_t selectedPointLight{};
-
-        float m_selectedMesh{};
+        size_t m_selectedObject{};
+        size_t m_selectedPointLight{};
 
         bool m_isEditMode : 1{ true };
 
@@ -106,10 +106,12 @@ namespace TombForge
         bool m_showRegistryWindow : 1{};
         bool m_showModelWindow : 1{};
         bool m_showLevelWindow : 1{};
+        bool m_showTextureWindow : 1{};
 
         bool m_showColliders : 1{};
         bool m_showMeshWireframe : 1{}; // Not the collider
         bool m_drawOctree : 1{};
+        bool m_drawNormals : 1{};
 
         Axis m_selectedAxis{ Axis::None };
         SelectMode m_selectMode{ SelectMode::Translate };

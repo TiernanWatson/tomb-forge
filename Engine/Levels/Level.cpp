@@ -19,7 +19,7 @@ namespace TombForge
 
     AABB CalculateLevelBounds(const Level& level)
     {
-        if (level.meshes.size() > 1)
+        if (level.meshes.size() > 0)
         {
             glm::vec3 min{ FLT_MAX, FLT_MAX, FLT_MAX };
             glm::vec3 max{ -FLT_MAX, -FLT_MAX, -FLT_MAX };
@@ -66,6 +66,15 @@ namespace TombForge
 
         const size_t copyCount = lightIndices.size() < MaxLightsPerMesh ? lightIndices.size() : MaxLightsPerMesh;
         memcpy(result.data(), lightIndices.data(), copyCount * sizeof(uint32_t));
+    }
+
+    void UpdateAllClosestLights(Level& level)
+    {
+        for (auto& mesh : level.meshes)
+        {
+            const glm::vec3 lightReferencePosition = (mesh.bounds.min + mesh.bounds.max) / 2.0f;
+            GetClosestLights(level, lightReferencePosition, mesh.lights);
+        }
     }
 
     void InitializeCollider(MeshInstance& mesh, const glm::vec3& extents)

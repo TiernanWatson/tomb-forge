@@ -33,18 +33,13 @@ namespace TombForge
     struct Texture : public AssetBase
     {
         std::vector<ColorByte> data{};
-
         uint32_t width{};
-
         uint32_t height{};
-
         TextureHandle gpuHandle{};
-
         TextureFormat format{};
-
         TextureDataType type{};
-
         TextureFilter filter{ TextureFilter::Trilinear };
+        bool sRGB{ true }; // Generally true for diffuse textures, false for normals
 
         inline bool IsValidData() const
         {
