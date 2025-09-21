@@ -74,7 +74,7 @@ namespace TombForge
                 ctx->windowWidth = width;
                 ctx->windowHeight = height;
                 ctx->camera.aspect = static_cast<float>(width) / height;
-                ctx->renderer->OnWindowResized(width, height);
+                ctx->renderer.OnWindowResized(width, height);
             }
         }
 
@@ -127,8 +127,7 @@ namespace TombForge
             // Material
 
             std::shared_ptr<Material> debugMaterial = std::make_shared<Material>();
-            debugMaterial->diffuse = debugTexture;
-            debugMaterial->AddFlag(MATERIAL_FLAG_DIFFUSE);
+            debugMaterial->albedoTexture = debugTexture;
             debugMaterial->id = DebugMaterialId;
             debugMaterial->name = "Debug Material";
             ctx.assetRegistry.AddAssetBuiltin(debugMaterial);
@@ -141,7 +140,7 @@ namespace TombForge
             cube->id = CubeId;
             cube->name = "Cube";
             ctx.assetRegistry.AddAssetBuiltin(cube);
-            ctx.renderer->InitializeModel(*cube);
+            ctx.renderer.InitializeModel(*cube);
 
             // Cone
 
@@ -151,7 +150,7 @@ namespace TombForge
             cone->id = ConeId;
             cone->name = "Cone";
             ctx.assetRegistry.AddAssetBuiltin(cone);
-            ctx.renderer->InitializeModel(*cone);
+            ctx.renderer.InitializeModel(*cone);
 
             // Arrow
 
@@ -161,7 +160,7 @@ namespace TombForge
             arrow->id = ArrowId;
             arrow->name = "Arrow";
             ctx.assetRegistry.AddAssetBuiltin(arrow);
-            ctx.renderer->InitializeModel(*arrow);
+            ctx.renderer.InitializeModel(*arrow);
         }
 
         JPH::BodyID CreateBody(JPH::BodyInterface& bodies, JPH::Ref<JPH::Shape> shape, JPH::EMotionType motion, JPH::uint64 userData)
@@ -191,7 +190,7 @@ namespace TombForge
 
             ctx.lara.animPlayer.SetSkeleton(ctx.lara.model->skeleton);
 
-            ctx.renderer->InitializeModel(*ctx.lara.model);
+            ctx.renderer.InitializeModel(*ctx.lara.model);
 
             constexpr float LaraHeight = 1.75f;
             constexpr float LaraRadius = 0.25f;
@@ -417,7 +416,7 @@ namespace TombForge
 
         InitPhysics(ctx.physics);
 
-        ctx.renderer = std::make_unique<Renderer>();
+        ctx.renderer.Initialize();
         ctx.camera.aspect = static_cast<float>(ctx.windowWidth) / ctx.windowHeight;
         SetupDefaultShapes(ctx);
 
@@ -434,7 +433,7 @@ namespace TombForge
         const double currentTime = glfwGetTime();
         ctx.deltaTime = Maths::Clamp(static_cast<float>(currentTime - ctx.previousTime), 0.0f, MaxDeltaTime);
 
-        ctx.renderer->ClearFramebuffer();
+        ctx.renderer.ClearFramebuffer();
 
         if (ctx.level)
         {
@@ -497,7 +496,7 @@ namespace TombForge
                 ctx.physics.system->Update(ctx.deltaTime, 1, ctx.physics.tmpAllocator, ctx.physics.jobSystem);
             }
 
-            ctx.renderer->RenderLevel(*ctx.level, ctx.lara, ctx.camera);
+            ctx.renderer.RenderLevel(*ctx.level, ctx.lara, ctx.camera);
         }
 
         ctx.audioSystem.Update(ctx.deltaTime);
@@ -547,7 +546,7 @@ namespace TombForge
 
         if (ctx.level)
         {
-            ctx.renderer->InitializeLevel(*ctx.level);
+            ctx.renderer.InitializeLevel(*ctx.level);
             InitializeColliders(ctx);
             ctx.lara.transform.position = ctx.level->startPosition;
         }
@@ -587,7 +586,7 @@ namespace TombForge
             ctx.level->boxColliders.clear();
             ctx.level->meshColliders.clear();
 
-            ctx.renderer->DeloadLevel(*ctx.level);
+            ctx.renderer.DeloadLevel(*ctx.level);
             ctx.level->meshes.clear();
         }
 

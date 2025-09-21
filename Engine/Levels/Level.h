@@ -114,6 +114,7 @@ namespace TombForge
         uint32_t mesh{}; // Index into model's mesh array
         AABB bounds{}; // World-space, only updated if moved
         Collision collision{};
+        uint8_t lightCount{};
     };
 
     struct SoundInstance
@@ -158,7 +159,7 @@ namespace TombForge
 
     void UpdateBounds(const Level& level, MeshInstance& meshInstance);
     AABB CalculateLevelBounds(const Level& level);
-    void GetClosestLights(const Level& level, const glm::vec3& position, MeshLightArray& result);
+    void GetClosestLights(const Level& level, const glm::vec3& position, MeshLightArray& result, uint8_t& lightCount);
     void UpdateAllClosestLights(Level& level);
     void InitializeCollider(MeshInstance& mesh, const glm::vec3& extents);
 }

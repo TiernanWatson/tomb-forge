@@ -46,6 +46,7 @@ namespace TombForge
         Editor& operator=(const Editor&) = delete;
         Editor& operator=(Editor&&) = delete;
 
+        void Init(const std::string& projectPath);
         void Update();
 
     private:

@@ -13,20 +13,24 @@ namespace TombForge
     enum MaterialFlags : uint8_t
     {
         MATERIAL_FLAG_NONE = 0,
-        MATERIAL_FLAG_DIFFUSE = 1,
-        MATERIAL_FLAG_NORMAL = 2,
-        MATERIAL_FLAG_TRANSPARENT = 4,
-        MATERIAL_FLAG_SKINNED = 8,
-
-        MATERIAL_FLAG_DIFFUSE_NORMAL = MATERIAL_FLAG_DIFFUSE | MATERIAL_FLAG_NORMAL
+        MATERIAL_FLAG_TRANSPARENT = 1 << 0,
     };
 
     struct Material : public AssetBase
     {
-        std::shared_ptr<Texture> diffuse{};
-        std::shared_ptr<Texture> normal{};
-        glm::vec4 baseColor{ 1.0f, 1.0f, 1.0f, 1.0f }; // Percentage range
-        float roughness{};
+        static const glm::vec4 DefaultAlbedoColor;
+        static const float DefaultRoughness;
+        static const float DefaultMetalness;
+
+        std::shared_ptr<Texture> albedoTexture{};
+        std::shared_ptr<Texture> normalTexture{};
+        std::shared_ptr<Texture> roughnessTexture{};
+        std::shared_ptr<Texture> metalnessTexture{};
+
+        glm::vec4 albedoColor{ DefaultAlbedoColor }; // Color multiplied with albedo texture, 0.0 -> 1.0
+        float roughnessValue{ DefaultRoughness }; // Used if there is no roughness map, 0.0 -> 1.0
+        float metalnessValue{ DefaultMetalness }; // Used if there is no metalness map, 0.0 -> 1.0
+
         ShaderHandle shader{};
         MaterialFlags flags{};
 

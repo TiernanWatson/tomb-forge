@@ -43,7 +43,7 @@ namespace TombForge
         }
     }
 
-    void GetClosestLights(const Level& level, const glm::vec3& position, MeshLightArray& result)
+    void GetClosestLights(const Level& level, const glm::vec3& position, MeshLightArray& result, uint8_t& lightCount)
     {
         // todo: There are problems with this algorithm in AOD levels, as they are room based.
         // Look at taking occlusion into account using ray cast. If this doesn't help, need to look
@@ -66,6 +66,7 @@ namespace TombForge
 
         const size_t copyCount = lightIndices.size() < MaxLightsPerMesh ? lightIndices.size() : MaxLightsPerMesh;
         memcpy(result.data(), lightIndices.data(), copyCount * sizeof(uint32_t));
+        lightCount = static_cast<uint8_t>(copyCount);
     }
 
     void UpdateAllClosestLights(Level& level)
@@ -73,7 +74,7 @@ namespace TombForge
         for (auto& mesh : level.meshes)
         {
             const glm::vec3 lightReferencePosition = (mesh.bounds.min + mesh.bounds.max) / 2.0f;
-            GetClosestLights(level, lightReferencePosition, mesh.lights);
+            GetClosestLights(level, lightReferencePosition, mesh.lights, mesh.lightCount);
         }
     }
 

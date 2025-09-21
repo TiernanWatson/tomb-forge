@@ -24,6 +24,7 @@
 #include "Engine/Player/Input.h"
 #include "Engine/Rendering/JoltDebugRenderer.h"
 #include "Engine/Rendering/Material.h"
+#include "Engine/Rendering/ShaderCache.h"
 #include "Engine/Rendering/Texture.h"
 
 namespace TombForge
@@ -144,6 +145,14 @@ namespace TombForge
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplGlfw_Shutdown();
         ImGui::DestroyContext();
+    }
+
+    void Editor::Init(const std::string& projectPath)
+    {
+        if (!projectPath.empty())
+        {
+            LoadProject(projectPath);
+        }
     }
 
     void Editor::Update()
@@ -276,17 +285,17 @@ namespace TombForge
             {
                 auto& obj = m_ctx.level->meshes[m_selectedObject];
                 auto& mesh = m_ctx.level->models[obj.model]->meshes[obj.mesh];
-                m_ctx.renderer->RenderWireframe(mesh, obj.transform, m_ctx.camera);
+                m_ctx.renderer.RenderWireframe(mesh, obj.transform, m_ctx.camera);
             }
         }
 
         if (m_drawOctree)
         {
-            m_ctx.renderer->DrawOctree(glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f }, m_ctx.camera);
+            m_ctx.renderer.DrawOctree(glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f }, m_ctx.camera);
 
             if (m_selectedObject < m_ctx.level->meshes.size())
             {
-                m_ctx.renderer->DrawBox(
+                m_ctx.renderer.DrawBox(
                     m_ctx.level->meshes[m_selectedObject].bounds,
                     glm::vec4{ 1.0f, 1.0f, 1.0f, 1.0f },
                     m_ctx.camera);
@@ -300,7 +309,7 @@ namespace TombForge
                 auto& obj = m_ctx.level->meshes[m_selectedObject];
                 auto& mesh = m_ctx.level->models[obj.model]->meshes[obj.mesh];
 
-                m_ctx.renderer->DrawBox(
+                m_ctx.renderer.DrawBox(
                     mesh.bounds,
                     glm::vec4{ 0.5f, 0.5f, 1.0f, 1.0f },
                     m_ctx.camera);
@@ -336,7 +345,7 @@ namespace TombForge
     {
         // todo: look at having some kind of editor-only renderer to do this
         Graphics& graphics = graphics.Get();
-        graphics.UseGizmoShader();
+        graphics.UseShader(ShaderCache::Get().GetGizmoShader());
 
         Camera& cam = m_ctx.camera;
 
@@ -432,9 +441,18 @@ namespace TombForge
                         }
                     }
                 }
-                if (m_ctx.level && ImGui::MenuItem("Save Level"))
+                if (m_ctx.level && m_ctx.level->IsValid() && ImGui::MenuItem("Save Level"))
                 {
                     m_ctx.assetRegistry.SaveAsset(m_ctx.level);
+                }
+                if (m_ctx.level && ImGui::MenuItem("Save Level As..."))
+                {
+                    const std::string filePath = SaveFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        m_ctx.assetRegistry.AddAsset<Level>(m_ctx.level, filePath, "");
+                        m_ctx.assetRegistry.Save();
+                    }
                 }
             }
             ImGui::Separator();
@@ -494,11 +512,11 @@ namespace TombForge
                                 instance.modelMatrix = instance.transform.AsMatrix();
 
                                 const glm::vec3 lightReferencePosition = (instance.bounds.min + instance.bounds.max) / 2.0f;
-                                GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights);
+                                GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights, instance.lightCount);
                             }
                         }
 
-                        m_ctx.renderer->InitializeLevel(*m_ctx.level);
+                        m_ctx.renderer.InitializeLevel(*m_ctx.level);
 
                         SetAndInitColliders(m_ctx, std::move(result.boxColliders));
                         SetAndInitColliders(m_ctx, std::move(result.meshColliders));
@@ -647,10 +665,10 @@ namespace TombForge
                                     instance.bounds = model->meshes[i].bounds;
                                     instance.modelMatrix = instance.transform.AsMatrix();
                                     const glm::vec3 lightReferencePosition = (instance.bounds.min + instance.bounds.max) / 2.0f;
-                                    GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights);
+                                    GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights, instance.lightCount);
                                 }
 
-                                m_ctx.renderer->InitializeLevel(*m_ctx.level);
+                                m_ctx.renderer.InitializeLevel(*m_ctx.level);
                             }
                             else
                             {
@@ -669,7 +687,7 @@ namespace TombForge
                         obj.mesh = 0;
                         obj.bounds = cubeModel->meshes[0].bounds;
                         obj.modelMatrix = obj.transform.AsMatrix();
-                        m_ctx.renderer->InitializeLevel(*m_ctx.level);
+                        m_ctx.renderer.InitializeLevel(*m_ctx.level);
                     }
                 }
                 if (ImGui::MenuItem("Asset Registry"))
@@ -785,54 +803,103 @@ namespace TombForge
         }
         else
         {
+            const bool isInUse = m_material.use_count() > 1; // 1 ref from asset registry
             ImGui::Text("Name: %s", m_material->name.c_str());
-            if (m_material->diffuse)
-            {
-                ImGui::Text("Diffuse: %s", m_material->diffuse->name.c_str());
-            }
-            else
-            {
-                ImGui::Text("Diffuse: Null");
-            }
+            ImGui::Text("Diffuse: %s", m_material->albedoTexture ? m_material->albedoTexture->name.c_str() : "None");
             if (ImGui::Button("Set Diffuse"))
             {
                 const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
                 if (!texturePath.empty())
                 {
-                    m_material->diffuse = m_ctx.assetRegistry.Load<Texture>(texturePath);
-                    if (m_material->diffuse)
+                    auto albedoTexture = m_ctx.assetRegistry.Load<Texture>(texturePath);
+                    if (albedoTexture)
                     {
-                        m_material->AddFlag(MATERIAL_FLAG_DIFFUSE);
-                    }
-                    else
-                    {
-                        m_material->RemoveFlag(MATERIAL_FLAG_DIFFUSE);
+                        m_material->albedoTexture = albedoTexture;
+                        if (isInUse)
+                        {
+                            m_ctx.renderer.InitializeTexture(*albedoTexture);
+                        }
                     }
                 }
             }
-            if (m_material->normal)
+            ImGui::SameLine();
+            if (ImGui::Button("Clear###0"))
             {
-                ImGui::Text("Normal: %s", m_material->normal->name.c_str());
+                m_material->albedoTexture = nullptr;
             }
-            else
-            {
-                ImGui::Text("Normal: Null");
-            }
+            ImGui::Text("Normal: %s", m_material->normalTexture ? m_material->normalTexture->name.c_str() : "None");
             if (ImGui::Button("Set Normal"))
             {
                 const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
                 if (!texturePath.empty())
                 {
-                    m_material->normal = m_ctx.assetRegistry.Load<Texture>(texturePath);
-                    if (m_material->normal)
+                    auto normal = m_ctx.assetRegistry.Load<Texture>(texturePath);
+                    if (normal)
                     {
-                        m_material->AddFlag(MATERIAL_FLAG_NORMAL);
-                    }
-                    else
-                    {
-                        m_material->RemoveFlag(MATERIAL_FLAG_NORMAL);
+                        m_material->normalTexture = normal;
+                        if (isInUse)
+                        {
+                            m_ctx.renderer.InitializeTexture(*normal);
+                        }
                     }
                 }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear###1"))
+            {
+                m_material->normalTexture = nullptr;
+            }
+            ImGui::Text("Roughness: %s", m_material->roughnessTexture ? m_material->roughnessTexture->name.c_str() : "None");
+            if (ImGui::Button("Set Roughness"))
+            {
+                const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                if (!texturePath.empty())
+                {
+                    auto roughness = m_ctx.assetRegistry.Load<Texture>(texturePath);
+                    if (roughness)
+                    {
+                        m_material->roughnessTexture = roughness;
+                        if (isInUse)
+                        {
+                            m_ctx.renderer.InitializeTexture(*roughness);
+                        }
+                    }
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear###2"))
+            {
+                m_material->roughnessTexture = nullptr;
+            }
+            ImGui::Text("Metallic: %s", m_material->metalnessTexture ? m_material->metalnessTexture->name.c_str() : "None");
+            if (ImGui::Button("Set Metallic"))
+            {
+                const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                if (!texturePath.empty())
+                {
+                    auto metallic = m_ctx.assetRegistry.Load<Texture>(texturePath);
+                    if (metallic)
+                    {
+                        m_material->metalnessTexture = metallic;
+                        if (isInUse)
+                        {
+                            m_ctx.renderer.InitializeTexture(*metallic);
+                        }
+                    }
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Clear###3"))
+            {
+                m_material->metalnessTexture = nullptr;
+            }
+            if (!m_material->roughnessTexture) // Shader ignores value if texture is set
+            {
+                ImGui::InputFloat("Roughness Value", &m_material->roughnessValue, 0.01f, 0.1f, "%.2f");
+            }
+            if (!m_material->metalnessTexture)
+            {
+                ImGui::InputFloat("Metallic Value", &m_material->metalnessValue, 0.01f, 0.1f, "%.2f");
             }
             bool isTransparent = m_material->TestFlag(MATERIAL_FLAG_TRANSPARENT);
             if (ImGui::Checkbox("Is Transparent", &isTransparent))
@@ -1050,14 +1117,14 @@ namespace TombForge
                             if (auto material = m_ctx.assetRegistry.Load<Material>(materialPath); material)
                             {
                                 obj.overrideMaterial = material;
-                                m_ctx.renderer->InitializeLevel(*m_ctx.level);
+                                m_ctx.renderer.InitializeLevel(*m_ctx.level);
                             }
                         }
                     }
                     if (obj.overrideMaterial && ImGui::Button("Clear Override"))
                     {
                         obj.overrideMaterial = nullptr;
-                        m_ctx.renderer->InitializeLevel(*m_ctx.level);
+                        m_ctx.renderer.InitializeLevel(*m_ctx.level);
                     }
                     ImGui::SeparatorText("Lights");
                     ImGui::Text("%i, %i, %i, %i, %i, %i, %i, %i",
@@ -1083,23 +1150,6 @@ namespace TombForge
             {
                 for (size_t l = 0; l < m_ctx.level->pointLights.size(); l++)
                 {
-                    if (m_selectedObject < m_ctx.level->meshes.size())
-                    {
-                        bool found = false;
-                        for (auto& light : m_ctx.level->meshes[m_selectedObject].lights)
-                        {
-                            if (light == l)
-                            {
-                                found = true;
-                                break;
-                            }
-                        }
-                        if (!found)
-                        {
-                            continue;
-                        }
-                    }
-
                     bool selected = m_selectedPointLight == l;
                     if (ImGui::Selectable(std::to_string(l).c_str(), &selected))
                     {
@@ -1117,6 +1167,16 @@ namespace TombForge
                 light.innerRadius = 1.0f;
                 light.outerRadius = 5.0f;
             }
+            ImGui::SameLine();
+            if (ImGui::Button("Delete Light"))
+            {
+                if (m_selectedPointLight < m_ctx.level->pointLights.size())
+                {
+                    m_ctx.level->pointLights.erase(m_ctx.level->pointLights.begin() + m_selectedPointLight);
+                    UpdateAllClosestLights(*m_ctx.level);
+                    m_ctx.renderer.UpdateLights(*m_ctx.level);
+                }
+            }
 
             if (m_selectedPointLight < m_ctx.level->pointLights.size())
             {
@@ -1130,7 +1190,7 @@ namespace TombForge
                 if (modified)
                 {
                     UpdateAllClosestLights(*m_ctx.level);
-                    m_ctx.renderer->UpdateLights(*m_ctx.level);
+                    m_ctx.renderer.UpdateLights(*m_ctx.level);
                 }
             }
 
@@ -1268,14 +1328,14 @@ namespace TombForge
                                 }
 
                                 // Save material before textures so they exist when material is loaded
-                                if (mesh.material->diffuse)
+                                if (mesh.material->albedoTexture)
                                 {
-                                    m_ctx.assetRegistry.AddAsset(mesh.material->diffuse, mesh.material->diffuse->name, filePath);
+                                    m_ctx.assetRegistry.AddAsset(mesh.material->albedoTexture, mesh.material->albedoTexture->name, filePath);
                                 }
 
-                                if (mesh.material->normal)
+                                if (mesh.material->normalTexture)
                                 {
-                                    m_ctx.assetRegistry.AddAsset(mesh.material->normal, mesh.material->normal->name, filePath);
+                                    m_ctx.assetRegistry.AddAsset(mesh.material->normalTexture, mesh.material->normalTexture->name, filePath);
                                 }
 
                                 m_ctx.assetRegistry.AddAsset(mesh.material, mesh.material->name, filePath);
@@ -1535,9 +1595,9 @@ namespace TombForge
         }
 
         ImGui::InputText("Name", &m_ctx.level->name);
-        if (ImGui::Button("Set as Default Level"))
+        if (ImGui::Button("Set as Default Level") && m_ctx.level->IsValid())
         {
-            m_project.defaultLevelPath = m_ctx.assetRegistry.GetAssetId(m_ctx.level->GetFileName());
+            m_project.defaultLevelPath = m_ctx.level->id;
         }
         if (IsValidAssetId(m_project.defaultLevelPath))
         {
@@ -1698,7 +1758,7 @@ namespace TombForge
         if (m_ctx.level)
         {
             const glm::vec3 lightReferencePosition = (obj.bounds.min + obj.bounds.max) / 2.0f;
-            GetClosestLights(*m_ctx.level, lightReferencePosition, obj.lights);
+            GetClosestLights(*m_ctx.level, lightReferencePosition, obj.lights, obj.lightCount);
         }
     }
 

@@ -82,7 +82,7 @@ namespace TombForge
                 }
                 auto& newLight = result.lights.emplace_back();
                 newLight.color = SRGBToLinear({ light.R, light.G, light.B });
-                newLight.intensity = 1.0f; // Not provided by exporter (it just uses radius)
+                newLight.intensity = 20.0f; // Not provided by exporter (it just uses radius)
                 newLight.position = adjustment.AsMatrix() * glm::vec4{ light.tX, light.tY, light.tZ, 1.0f };
                 newLight.innerRadius = light.Decay_Far_Start * settings.scale;
                 newLight.outerRadius = light.Decay_Far_End * settings.scale;
@@ -177,16 +177,12 @@ namespace TombForge
                         exists = FileIO::SearchForFile(fileName, basePath, &texturePath, &excludeExt);
                     }
 
-                    mat->diffuse = std::make_shared<Texture>();
-                    mat->diffuse->name = outZone.Material[m].name;
-                    if (!exists || !ImportTexture(texturePath, *mat->diffuse))
+                    mat->albedoTexture = std::make_shared<Texture>();
+                    mat->albedoTexture->name = outZone.Material[m].name;
+                    if (!exists || !ImportTexture(texturePath, *mat->albedoTexture))
                     {
-                        LOG_WARNING("Could not import texture %s", mat->diffuse->name);
-                        mat->diffuse = nullptr;
-                    }
-                    else
-                    {
-                        mat->AddFlag(MATERIAL_FLAG_DIFFUSE);
+                        LOG_WARNING("Could not import texture %s", mat->albedoTexture->name);
+                        mat->albedoTexture = nullptr;
                     }
                 }
             }

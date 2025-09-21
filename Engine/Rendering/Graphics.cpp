@@ -16,15 +16,6 @@ namespace TombForge
 {
     namespace
     {
-        constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedVertexShader.glsl";
-        constexpr char const* BaseFragmentShaderPath = "Shaders\\BaseFragmentShader.glsl";
-        constexpr char const* BaseVertexShaderPath = "Shaders\\BaseVertexShader.glsl";
-        constexpr char const* LineVertexShaderPath = "Shaders\\LineVertexShader.glsl";
-        constexpr char const* ColorFragmentShaderPath = "Shaders\\ColorFragmentShader.glsl";
-        constexpr char const* GizmoFragmentShaderPath = "Shaders\\GizmoFragmentShader.glsl";
-        constexpr char const* DepthFragmentShaderPath = "Shaders\\DepthFragmentShader.glsl";
-        constexpr char const* DepthVertexShaderPath = "Shaders\\DepthVertexShader.glsl";
-
         constexpr float ClearBufferColor[] = { 0.1f, 0.1f, 0.1f, 1.0f };
 
         // Generic function to test if any errors occurred
@@ -67,36 +58,14 @@ namespace TombForge
     uint32_t MeshHandle::InvalidMeshIndex = (uint32_t)-1;
     uint32_t TextureHandle::InvalidTextureIndex = (uint32_t)-1;
 
-    Graphics::Graphics()
+    Graphics& Graphics::Get()
     {
-        const std::string vertexSource = FileIO::ReadEntireFile(SkinnedVertexShaderPath);
-        const std::string fragSource = FileIO::ReadEntireFile(BaseFragmentShaderPath);
-        if (!CompileShader(vertexSource, fragSource, m_skinnedShader))
-        {
-            throw std::runtime_error("Failed to compile default shader");
-        }
+        static Graphics graphics{};
+        return graphics;
+    }
 
-        const std::string lineVertexSource = FileIO::ReadEntireFile(LineVertexShaderPath);
-        const std::string colorFragmentSource = FileIO::ReadEntireFile(ColorFragmentShaderPath);
-        if (!CompileShader(lineVertexSource, colorFragmentSource, m_lineShader))
-        {
-            throw std::runtime_error("Failed to compile line shader");
-        }
-
-        const std::string gizmoFragmentSource = FileIO::ReadEntireFile(GizmoFragmentShaderPath);
-        const std::string baseVertexSource = FileIO::ReadEntireFile(BaseVertexShaderPath);
-        if (!CompileShader(baseVertexSource, gizmoFragmentSource, m_gizmoShader))
-        {
-            throw std::runtime_error("Failed to compile gizmo shader");
-        }
-
-        const std::string depthFragmentSource = FileIO::ReadEntireFile(DepthFragmentShaderPath);
-        const std::string depthVertexSource = FileIO::ReadEntireFile(DepthVertexShaderPath);
-        if (!CompileShader(depthVertexSource, ""/*depthFragmentSource*/, m_depthShader))
-        {
-            throw std::runtime_error("Failed to compile depth shader");
-        }
-
+    void Graphics::Initialize()
+    {
         glEnable(GL_DEPTH_TEST);
 
         glEnable(GL_CULL_FACE);
@@ -108,43 +77,7 @@ namespace TombForge
         glEnable(GL_MULTISAMPLE);
         glEnable(GL_FRAMEBUFFER_SRGB);
 
-        // Setup white texture
-        m_whiteTexture = std::make_unique<Texture>();
-        m_whiteTexture->width = m_whiteTexture->height = 1;
-        m_whiteTexture->format = TextureFormat::RGBA;
-
-        ColorByte white = 255;
-        m_whiteTexture->data.emplace_back(white);
-        m_whiteTexture->data.emplace_back(white);
-        m_whiteTexture->data.emplace_back(white);
-        m_whiteTexture->data.emplace_back(white);
-
-        m_whiteTexture->gpuHandle = CreateTextureInstance(*m_whiteTexture);
-
-        // Setup (error) magenta texture
-        m_magentaTexture = std::make_unique<Texture>();
-        m_magentaTexture->width = m_magentaTexture->height = 1;
-        m_magentaTexture->format = TextureFormat::RGB;
-        m_magentaTexture->data.emplace_back(white);
-        m_magentaTexture->data.emplace_back(0);
-        m_magentaTexture->data.emplace_back(white);
-
-        m_magentaTexture->gpuHandle = CreateTextureInstance(*m_magentaTexture);
-
         LoopGLErrors();
-    }
-
-    Graphics::~Graphics()
-    {
-        glDeleteProgram(m_skinnedShader);
-        glDeleteProgram(m_lineShader);
-    }
-
-    Graphics& Graphics::Get()
-    {
-        // todo: remove this singleton
-        static Graphics graphics{};
-        return graphics;
     }
 
     void Graphics::SetDepthTest(bool enabled)
@@ -278,8 +211,6 @@ namespace TombForge
         glEnableVertexAttribArray(1);
         glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(LineVertex), (void*)offsetof(LineVertex, color));
 
-        glUseProgram(m_lineShader);
-
         // * 2 because the Line struct is made of two points and we send individual points to the shader
         glDrawArrays(GL_LINES, 0, lines.size() * 2);
 
@@ -312,8 +243,6 @@ namespace TombForge
         glEnableVertexAttribArray(0);
         glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(glm::vec3), (void*)offsetof(Triangle, p0));
 
-        glUseProgram(m_lineShader);
-
         glDrawArrays(GL_TRIANGLES, 0, 3);
 
         glDeleteBuffers(1, &vbo);
@@ -329,7 +258,7 @@ namespace TombForge
 
         // Create or re-use
 
-        unsigned int id{};
+        GLuint id{};
         size_t arrayIndex{};
         if (texture.gpuHandle.IsValid())
         {
@@ -564,16 +493,6 @@ namespace TombForge
         LoopGLErrors();
     }
 
-    void Graphics::SetWhiteTexture(const std::string& name)
-    {
-        SetTexture(name, m_whiteTexture->gpuHandle);
-    }
-
-    void Graphics::SetMagentaTexture(const std::string& name)
-    {
-        SetTexture(name, m_magentaTexture->gpuHandle);
-    }
-
     void Graphics::ResizeFramebuffer(int width, int height)
     {
         glViewport(0, 0, width, height);
@@ -629,15 +548,21 @@ namespace TombForge
         LoopGLErrors();
     }
 
-    void Graphics::InitializeShader(Shader& shader)
+    ShaderHandle Graphics::CompileShader(const char* vertex, const char* fragment)
     {
+        ASSERT(vertex != nullptr, "Vertex shader source is null");
+        ASSERT(fragment != nullptr, "Fragment shader source is null");
+        ASSERT(vertex[0] != 0, "Vertex shader source is empty");
+        ASSERT(fragment[0] != 0, "Fragment shader source is empty");
+
         GLuint programId{};
-        if (CompileShader(shader.vertexSource, shader.fragmentSource, programId))
+        if (CompileShader(vertex, fragment, programId))
         {
             m_shaders.emplace_back(programId);
-            shader.gpuHandle.index = m_shaders.size() - 1;
-            shader.gpuHandle.generation = 1;
+            uint16_t index = m_shaders.size() - 1;
+            return ShaderHandle{ index, 1 };
         }
+        return {};
     }
 
     ShaderLocation Graphics::GetLocation(ShaderHandle shader, const std::string& name)

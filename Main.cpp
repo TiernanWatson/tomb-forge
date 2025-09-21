@@ -6,12 +6,11 @@
 #include "Engine/Editor.h"
 #endif
 
-int main()
+int main(int argc, char* argv[])
 {
     using namespace TombForge;
 
     EngineContext context{};
-
     if (!InitEngine(context))
     {
         std::cerr << "Failed to initialize engine." << std::endl;
@@ -20,6 +19,11 @@ int main()
 
 #if EDITOR_ENABLED
     Editor editor(context);
+    if (argc > 0)
+    {
+        const std::string projectPath = argv[1];
+        editor.Init(projectPath);
+    }
 #endif
 
     bool shouldQuit = false;

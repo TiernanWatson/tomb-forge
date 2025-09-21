@@ -347,10 +347,7 @@ namespace TombForge
                     texture->name.append(texturePath.data[0] == '*' ? "Embedded" : FileIO::GetFileName(texturePath.data));
                     texture->name.append(".tftex");
                     texture->sRGB = true;
-
-                    outMaterial.diffuse = texture;
-                    outMaterial.AddFlag(MATERIAL_FLAG_DIFFUSE);
-
+                    outMaterial.albedoTexture = texture;
                     break;
                 }
             }
@@ -377,10 +374,7 @@ namespace TombForge
                     texture->name.append(texturePath.data[0] == '*' ? "Embedded" : FileIO::GetFileName(texturePath.data));
                     texture->name.append(".tftex");
                     texture->sRGB = false;
-
-                    outMaterial.normal = texture;
-                    outMaterial.AddFlag(MATERIAL_FLAG_NORMAL);
-
+                    outMaterial.normalTexture = texture;
                     break;
                 }
             }

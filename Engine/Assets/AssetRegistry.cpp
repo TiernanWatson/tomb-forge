@@ -345,21 +345,31 @@ namespace TombForge
         if (json.contains("diffuse"))
         {
             const AssetId diffusePath = json["diffuse"].get<AssetId>();
-            resource->diffuse = Load<Texture>(diffusePath);
-            resource->AddFlag(MATERIAL_FLAG_DIFFUSE);
+            resource->albedoTexture = Load<Texture>(diffusePath);
         }
 
         if (json.contains("normal"))
         {
             const AssetId normalPath = json["normal"].get<AssetId>();
-            resource->normal = Load<Texture>(normalPath);
-            resource->AddFlag(MATERIAL_FLAG_NORMAL);
+            resource->normalTexture = Load<Texture>(normalPath);
         }
 
-        if (json.contains("baseColor"))
+        if (json.contains("roughness"))
         {
-            auto baseColor = json["baseColor"];
-            resource->baseColor = glm::vec4{ baseColor[0], baseColor[1], baseColor[2], baseColor[3] };
+            const AssetId roughnessPath = json["roughness"].get<AssetId>();
+            resource->roughnessTexture = Load<Texture>(roughnessPath);
+        }
+
+        if (json.contains("metalness"))
+        {
+            const AssetId metalnessPath = json["metalness"].get<AssetId>();
+            resource->metalnessTexture = Load<Texture>(metalnessPath);
+        }
+
+        if (json.contains("albedoColor"))
+        {
+            auto albedo = json["albedoColor"];
+            resource->albedoColor = glm::vec4{ albedo[0], albedo[1], albedo[2], albedo[3] };
         }
 
         if (json.contains("isTransparent"))
@@ -384,15 +394,23 @@ namespace TombForge
         if (outFile.is_open())
         {
             nlohmann::json json;
-            if (asset.diffuse)
+            if (asset.albedoTexture)
             {
-                json["diffuse"] = asset.diffuse->id;
+                json["diffuse"] = asset.albedoTexture->id;
             }
-            if (asset.normal)
+            if (asset.normalTexture)
             {
-                json["normal"] = asset.normal->id;
+                json["normal"] = asset.normalTexture->id;
             }
-            json["baseColor"] = { asset.baseColor.r, asset.baseColor.g, asset.baseColor.b, asset.baseColor.a };
+            if (asset.roughnessTexture)
+            {
+                json["roughness"] = asset.roughnessTexture->id;
+            }
+            if (asset.metalnessTexture)
+            {
+                json["metalness"] = asset.metalnessTexture->id;
+            }
+            json["albedoColor"] = { asset.albedoColor.r, asset.albedoColor.g, asset.albedoColor.b, asset.albedoColor.a };
             json["isTransparent"] = asset.TestFlag(MATERIAL_FLAG_TRANSPARENT);
 
             outFile << json.dump(4);
@@ -442,7 +460,7 @@ namespace TombForge
     {
         if (!asset.IsValidData())
         {
-            LOG_ERROR("Tried to save texture %s, but invalid data");
+            LOG_ERROR("Tried to save texture %s, but invalid data", asset.name.c_str());
             return;
         }
 
@@ -679,18 +697,36 @@ namespace TombForge
                     const AssetId materialId = item["overrideMaterial"].get<AssetId>();
                     instance.overrideMaterial = Load<Material>(materialId);
                 }
+                const auto& bounds = item["bounds"];
+                const auto& min = bounds["min"];
+                instance.bounds.min = glm::vec3{ min[0], min[1], min[2] };
+                const auto& max = bounds["max"];
+                instance.bounds.max = glm::vec3{ max[0], max[1], max[2] };
+                const auto& lights = item["lights"];
+                instance.lights = {
+                    lights[0],
+                    lights[1],
+                    lights[2],
+                    lights[3],
+                    lights[4],
+                    lights[5],
+                    lights[6],
+                    lights[7]
+                };
+                instance.lightCount = item["lightCount"].get<uint8_t>();
+                instance.modelMatrix = instance.transform.AsMatrix();
             }
 
             for (const auto& item : json["pointLights"])
             {
-                PointLight light{};
+                PointLight& light = result->pointLights.emplace_back();
                 const auto& position = item["position"];
                 light.position = glm::vec3{ position[0], position[1], position[2] };
                 const auto& color = item["color"];
                 light.color = glm::vec3{ color[0], color[1], color[2] };
                 light.innerRadius = item["innerRadius"].get<float>();
                 light.outerRadius = item["outerRadius"].get<float>();
-                result->pointLights.push_back(light);
+                light.intensity = item["intensity"].get<float>();
             }
 
             if (json.contains("directionalLight"))
@@ -699,6 +735,12 @@ namespace TombForge
                 result->directionalLight.dir = glm::vec3{ dir[0], dir[1], dir[2] };
                 const auto& color = json["directionalLight"]["color"];
                 result->directionalLight.color = glm::vec3{ color[0], color[1], color[2] };
+            }
+
+            if (json.contains("ambientColor"))
+            {
+                const auto& color = json["ambientColor"];
+                result->ambientColor = glm::vec3{ color[0], color[1], color[2] };
             }
 
             if (json.contains("ambientSound"))
@@ -753,6 +795,19 @@ namespace TombForge
             {
                 json["meshes"][i]["overrideMaterial"] = obj.overrideMaterial->id;
             }
+            json["meshes"][i]["bounds"]["min"] = { obj.bounds.min.x, obj.bounds.min.y, obj.bounds.min.z };
+            json["meshes"][i]["bounds"]["max"] = { obj.bounds.max.x, obj.bounds.max.y, obj.bounds.max.z };
+            json["meshes"][i]["lights"] = {
+                obj.lights[0],
+                obj.lights[1],
+                obj.lights[2],
+                obj.lights[3],
+                obj.lights[4],
+                obj.lights[5],
+                obj.lights[6],
+                obj.lights[7]
+            };  
+            json["meshes"][i]["lightCount"] = obj.lightCount;
         }
 
         for (size_t i = 0; i < asset.pointLights.size(); i++)
@@ -762,6 +817,7 @@ namespace TombForge
             json["pointLights"][i]["color"] = { obj.color.r, obj.color.g, obj.color.b };
             json["pointLights"][i]["innerRadius"] = obj.innerRadius;
             json["pointLights"][i]["outerRadius"] = obj.outerRadius;
+            json["pointLights"][i]["intensity"] = obj.intensity;
         }
 
         json["directionalLight"]["direction"] = {
@@ -774,6 +830,12 @@ namespace TombForge
             asset.directionalLight.color.r,
             asset.directionalLight.color.g,
             asset.directionalLight.color.b
+        };
+
+        json["ambientColor"] = {
+            asset.ambientColor.r,
+            asset.ambientColor.g,
+            asset.ambientColor.b
         };
 
         json["ambientSound"] = asset.ambientSound ? asset.ambientSound->id : InvalidAssetId;

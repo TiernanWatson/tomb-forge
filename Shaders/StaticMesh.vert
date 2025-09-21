@@ -8,9 +8,11 @@ layout (location = 5) in vec2 aUv;
 layout (location = 6) in ivec4 aBoneIds; 
 layout (location = 7) in vec4 aWeights;
 
+out mat3 TBN;
+out vec4 Color;
 out vec3 Normal;
-out vec2 TexCoords;
 out vec3 FragPos;
+out vec2 TexCoords;
 
 uniform mat4 model;
 uniform mat4 view;
@@ -18,13 +20,18 @@ uniform mat4 projection;
 
 void main()
 {
-	vec4 basePosition = vec4(aPosition, 1.0f);
-
+	vec4 basePosition = vec4(aPosition, 1.0);
 	mat3 normalMatrix = transpose(inverse(mat3(model)));
 
-	TexCoords = aUv;
-	Normal = normalize(normalMatrix * aNormal);
+	vec3 N = normalize(normalMatrix * aNormal);
+	vec3 T = normalize(normalMatrix * aTangent);
+	vec3 B = normalize(normalMatrix * aBitangent);
+
+	TBN = mat3(T, B, N);
+	Color = aColor;
+	Normal = N;
 	FragPos = vec3(model * basePosition);
+	TexCoords = aUv;
 	
 	gl_Position = projection * view * model * basePosition;
 }

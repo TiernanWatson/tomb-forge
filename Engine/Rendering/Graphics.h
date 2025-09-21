@@ -76,11 +76,9 @@ namespace TombForge
     class Graphics
     {
     public:
-        Graphics(const Graphics&) = delete;
-        Graphics(Graphics&&) = delete;
-        ~Graphics();
-
         static Graphics& Get();
+
+        void Initialize();
 
         // Pipeline Settings
 
@@ -129,9 +127,6 @@ namespace TombForge
         void SetTexture(ShaderLocation location, const TextureHandle handle);
         void SetTexture(ShaderLocation location, const TextureHandle handle, int unit);
 
-        void SetWhiteTexture(const std::string& name);
-        void SetMagentaTexture(const std::string& name);
-
         // Buffer and pipeline
 
         void ResizeFramebuffer(int width, int height);
@@ -145,41 +140,9 @@ namespace TombForge
 
         // Shaders
 
-        void InitializeShader(Shader& shader);
-
+        ShaderHandle CompileShader(const char* vertex, const char* fragment);
         ShaderLocation GetLocation(ShaderHandle shader, const std::string& name);
-
         void UseShader(ShaderHandle handle);
-
-        void UseShader(unsigned int id)
-        {
-            glUseProgram(id);
-            m_activeShader = id;
-        }
-
-        void UseGizmoShader()
-        {
-            glUseProgram(m_gizmoShader);
-            m_activeShader = m_gizmoShader;
-        }
-
-        void UseLineShader()
-        {
-            glUseProgram(m_lineShader);
-            m_activeShader = m_lineShader;
-        }
-
-        void UseSkinShader()
-        {
-            glUseProgram(m_skinnedShader);
-            m_activeShader = m_skinnedShader;
-        }
-
-        void UseDepthShader()
-        {
-            glUseProgram(m_depthShader);
-            m_activeShader = m_depthShader;
-        }
 
     private:
         struct MeshInstance
@@ -190,22 +153,13 @@ namespace TombForge
             GLuint ibo{};
         };
 
-        Graphics();
+        Graphics() = default;
 
         bool CompileShaderPart(const char* source, unsigned int type, unsigned int& outProgramId) const;
 
         std::vector<MeshInstance> m_meshes{};
         std::vector<GLuint> m_shaders{};
-        std::vector<unsigned int> m_textures{};
-
-        std::unique_ptr<Texture> m_whiteTexture{};
-        std::unique_ptr<Texture> m_magentaTexture{};
-
-        GLuint m_skinnedShader{};
-        GLuint m_staticShader{};
-        GLuint m_lineShader{};
-        GLuint m_gizmoShader{};
-        GLuint m_depthShader{};
+        std::vector<GLuint> m_textures{};
 
         GLuint m_activeShader{};
     };

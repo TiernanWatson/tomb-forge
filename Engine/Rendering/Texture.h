@@ -12,7 +12,7 @@ namespace TombForge
 
     enum class TextureFormat : uint8_t
     {
-        R = 0,
+        R = 1,
         RGB = 3,
         RGBA = 4
     };
@@ -39,7 +39,7 @@ namespace TombForge
         TextureFormat format{};
         TextureDataType type{};
         TextureFilter filter{ TextureFilter::Trilinear };
-        bool sRGB{ true }; // Generally true for diffuse textures, false for normals
+        bool sRGB{ true }; // Generally true for albedo textures, false for normals
 
         inline bool IsValidData() const
         {

@@ -65,8 +65,14 @@ namespace TombForge
     public:
         Renderer();
 
+        // Initializes the renderer and graphics system
+        void Initialize();
+
         // When a level is loaded, call this to set it up with the renderer
         bool InitializeLevel(Level& level);
+
+        // Sets up a CPU texture on the GPU
+        bool InitializeTexture(Texture& texture);
 
         // This destroys all the GPU instances of the meshes when a level is unloaded
         void DeloadLevel(Level& level);
@@ -107,8 +113,14 @@ namespace TombForge
     private:
         struct ShaderLocations
         {
-            ShaderLocation diffuse{};
-            ShaderLocation normal{};
+            ShaderLocation albedoTexture{};
+            ShaderLocation normalTexture{};
+            ShaderLocation roughnessTexture{};
+            ShaderLocation metalnessTexture{};
+
+            ShaderLocation albedoColor{};
+            ShaderLocation roughnessValue{};
+            ShaderLocation metalnessValue{};
 
             ShaderLocation lights{};
             ShaderLocation lightIndices[8]{};
@@ -124,6 +136,8 @@ namespace TombForge
             ShaderLocation dirLightColor{};
             ShaderLocation dirLightDirection{};
             ShaderLocation dirLightIntensity{};
+
+            ShaderLocation cameraPosition{};
         };
 
         void InitializeShaders();
@@ -142,30 +156,34 @@ namespace TombForge
 
         void SetMaterial(const Material& material);
 
+        void InitializeMaterial(Material& material);
+
         void DrawModel(const Model& model, 
             const Transform& transform, 
             const MeshLightArray& lightIndices,
+            const uint8_t lightCount,
             bool transparentPass = false,
             const std::vector<glm::mat4>* boneMatrices = nullptr);
 
         void DrawModelDepth(const Model& model, const Transform& transform);
 
-        void DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices, const Material* overrideMaterial = nullptr);
+        void DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices, uint8_t lightCount, const Material* overrideMaterial = nullptr);
 
         void ExtractCameraPlanes(Frustum& result, const glm::mat4& viewProj) const;
 
         OctTree m_octTree{};
 
-        Shader m_baseShader{};
-        Shader m_skinnedShader{};
-        Shader m_lineShader{};
-        Shader m_gizmoShader{};
-        Shader m_depthShader{};
+        ShaderHandle m_baseShader{};
+        ShaderHandle m_skinnedShader{};
+        ShaderHandle m_lineShader{};
+        ShaderHandle m_gizmoShader{};
+        ShaderHandle m_depthShader{};
 
         Texture m_lightsTexture{};
         Texture m_whiteTexture{};
         Texture m_magentaTexture{};
         Texture m_flatNormal{};
+        Texture m_singleChannelWhite{};
 
         ShaderLocations m_skinnedLocations{};
 

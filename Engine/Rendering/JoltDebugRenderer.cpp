@@ -1,9 +1,11 @@
 #include "Engine/Rendering/JoltDebugRenderer.h"
 
+#include <string_view>
+
 #include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtx/transform.hpp>
 
 #include "Engine/Rendering/Graphics.h"
+#include "Engine/Rendering/ShaderCache.h"
 
 namespace TombForge
 {
@@ -16,10 +18,10 @@ namespace TombForge
 
         Graphics& graphics = Graphics::Get();
 
-        glm::mat4 cameraView = glm::inverse(transform.AsMatrix());
-        glm::mat4 projection = glm::perspective(fovY, aspect, near, far);
+        const glm::mat4 cameraView = glm::inverse(transform.AsMatrix());
+        const glm::mat4 projection = glm::perspective(fovY, aspect, near, far);
 
-        graphics.UseLineShader();
+        graphics.UseShader(ShaderCache::Get().GetLineShader());
         graphics.SetMatrix4("view", cameraView);
         graphics.SetMatrix4("projection", projection);
         graphics.SetMatrix4("model", glm::mat4{ 1.0f });
@@ -57,7 +59,7 @@ namespace TombForge
 
     void JoltDebugRenderer::DrawTriangle(JPH::RVec3Arg inV1, JPH::RVec3Arg inV2, JPH::RVec3Arg inV3, JPH::ColorArg inColor, ECastShadow inCastShadow)
     {
-        Graphics::Get().UseLineShader();
+        Graphics::Get().UseShader(ShaderCache::Get().GetLineShader());
 
         glm::vec3 p0{ inV1.GetX(), inV1.GetY(), inV1.GetZ() };
         glm::vec3 p1{ inV2.GetX(), inV2.GetY(), inV2.GetZ() };
@@ -68,5 +70,6 @@ namespace TombForge
 
     void JoltDebugRenderer::DrawText3D(JPH::RVec3Arg inPosition, const std::string_view& inString, JPH::ColorArg inColor, float inHeight)
     {
+        // todo: implement
     }
 }

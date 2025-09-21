@@ -29,8 +29,7 @@ namespace TombForge
     {
         static constexpr float DefaultCameraSpeed{ 10.0f };
 
-        std::unique_ptr<Renderer> renderer{};
-
+        Renderer renderer{};
         AssetRegistry assetRegistry{};
         PhysicsInterface physicsInterface{};
         AudioSystem audioSystem{};

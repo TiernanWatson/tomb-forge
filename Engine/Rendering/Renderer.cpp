@@ -10,24 +10,18 @@
 #include "Engine/Levels/Level.h"
 #include "Engine/Player/Lara.h"
 #include "Engine/Rendering/Material.h"
+#include "Engine/Rendering/ShaderCache.h"
 
 namespace TombForge
 {
-    namespace
-    {
-        constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedVertexShader.glsl";
-        constexpr char const* BaseFragmentShaderPath = "Shaders\\BaseFragmentShader.glsl";
-        constexpr char const* BaseVertexShaderPath = "Shaders\\BaseVertexShader.glsl";
-        constexpr char const* LineVertexShaderPath = "Shaders\\LineVertexShader.glsl";
-        constexpr char const* ColorFragmentShaderPath = "Shaders\\ColorFragmentShader.glsl";
-        constexpr char const* GizmoFragmentShaderPath = "Shaders\\GizmoFragmentShader.glsl";
-        constexpr char const* DepthFragmentShaderPath = "Shaders\\DepthFragmentShader.glsl";
-        constexpr char const* DepthVertexShaderPath = "Shaders\\DepthVertexShader.glsl";
-    }
-
     Renderer::Renderer()
         : m_graphics{ Graphics::Get() }
     {
+    }
+
+    void Renderer::Initialize()
+    {
+        m_graphics.Initialize();
         InitializeShaders();
         InitializeDefaultTextures();
     }
@@ -51,27 +45,11 @@ namespace TombForge
 
             if (obj.overrideMaterial)
             {
-                if (obj.overrideMaterial->diffuse && !obj.overrideMaterial->diffuse->gpuHandle.IsValid())
-                {
-                    obj.overrideMaterial->diffuse->gpuHandle = m_graphics.CreateTextureInstance(*obj.overrideMaterial->diffuse);
-                }
-
-                if (obj.overrideMaterial->normal && !obj.overrideMaterial->normal->gpuHandle.IsValid())
-                {
-                    obj.overrideMaterial->normal->gpuHandle = m_graphics.CreateTextureInstance(*obj.overrideMaterial->normal);
-                }
+                InitializeMaterial(*obj.overrideMaterial);
             }
             else if (mesh.material)
             {
-                if (mesh.material->diffuse && !mesh.material->diffuse->gpuHandle.IsValid())
-                {
-                    mesh.material->diffuse->gpuHandle = m_graphics.CreateTextureInstance(*mesh.material->diffuse);
-                }
-
-                if (mesh.material->normal && !mesh.material->normal->gpuHandle.IsValid())
-                {
-                    mesh.material->normal->gpuHandle = m_graphics.CreateTextureInstance(*mesh.material->normal);
-                }
+                InitializeMaterial(*mesh.material);
             }
         }
 
@@ -85,6 +63,16 @@ namespace TombForge
         return true;
     }
 
+    bool Renderer::InitializeTexture(Texture& texture)
+    {
+        if (texture.gpuHandle.IsValid())
+        {
+            return true;
+        }
+        texture.gpuHandle = m_graphics.CreateTextureInstance(texture);
+        return texture.gpuHandle.IsValid();
+    }
+
     void Renderer::DeloadLevel(Level& level)
     {
         for (auto& meshInfo : level.meshes)
@@ -96,11 +84,11 @@ namespace TombForge
                 m_graphics.DestroyMeshInstance(mesh.gpuHandle);
             }
 
-            if (mesh.material && mesh.material->diffuse)
+            if (mesh.material && mesh.material->albedoTexture)
             {
-                if (mesh.material->diffuse->gpuHandle.IsValid())
+                if (mesh.material->albedoTexture->gpuHandle.IsValid())
                 {
-                    //mesh.mesh->material->diffuse->gpuHandle = m_graphics.DestroyTextureInstance(*mesh.material->diffuse);
+                    //mesh.mesh->material->albedoTexture->gpuHandle = m_graphics.DestroyTextureInstance(*mesh.material->albedoTexture);
                 }
             }
         }
@@ -118,7 +106,7 @@ namespace TombForge
 
     void Renderer::RenderLevel(const Level& level, const Lara& lara, const Camera& camera)
     {
-        m_graphics.UseShader(m_skinnedShader.gpuHandle);
+        m_graphics.UseShader(m_skinnedShader);
 
         m_viewMatrix = glm::inverse(camera.transform.AsMatrix());
         m_graphics.SetMatrix4(m_skinnedLocations.viewMatrix, m_viewMatrix);
@@ -132,10 +120,11 @@ namespace TombForge
         m_graphics.SetVec3(m_skinnedLocations.dirLightColor, SRGBToLinear(level.directionalLight.color));
         m_graphics.SetVec3(m_skinnedLocations.dirLightDirection, glm::normalize(level.directionalLight.dir));
         m_graphics.SetFloat(m_skinnedLocations.dirLightIntensity, level.directionalLight.intensity);
+        m_graphics.SetVec3(m_skinnedLocations.cameraPosition, camera.transform.position);
 
         if (m_lightsTexture.gpuHandle.IsValid())
         {
-            m_graphics.SetTexture(m_skinnedLocations.lights, m_lightsTexture.gpuHandle, 2);
+            m_graphics.SetTexture(m_skinnedLocations.lights, m_lightsTexture.gpuHandle, 4);
         }
 
         Frustum cameraPlanes{};
@@ -153,8 +142,9 @@ namespace TombForge
     {
         if (lara.model)
         {
+            uint8_t lightCount{};
             MeshLightArray lightIndices{};
-            GetClosestLights(level, lara.transform.position, lightIndices);
+            GetClosestLights(level, lara.transform.position, lightIndices, lightCount);
 
             Transform finalTransform = lara.transform;
             finalTransform.rotation *= glm::quat(lara.modelRotationOffset);
@@ -185,12 +175,9 @@ namespace TombForge
                 mesh.gpuHandle = m_graphics.CreateMeshInstance(mesh);
             }
 
-            if (mesh.material && mesh.material->diffuse)
+            if (mesh.material)
             {
-                if (!mesh.material->diffuse->gpuHandle.IsValid())
-                {
-                    mesh.material->diffuse->gpuHandle = m_graphics.CreateTextureInstance(*mesh.material->diffuse);
-                }
+                InitializeMaterial(*mesh.material);
             }
         }
 
@@ -199,7 +186,7 @@ namespace TombForge
 
     void Renderer::RenderWireframe(const Model& model, const Transform& transform, const Camera& camera)
     {
-        m_graphics.UseShader(m_gizmoShader.gpuHandle); // Just does a color - same thing
+        m_graphics.UseShader(m_gizmoShader); // Just does a color - same thing
         m_graphics.SetVec4("color", { 1.0f, 1.0f, 1.0f, 1.0f });
         m_graphics.SetMatrix4("model", transform.AsMatrix());
 
@@ -217,7 +204,7 @@ namespace TombForge
 
     void Renderer::RenderWireframe(const Mesh& model, const Transform& transform, const Camera& camera)
     {
-        m_graphics.UseShader(m_gizmoShader.gpuHandle); // Just does a color - same thing
+        m_graphics.UseShader(m_gizmoShader); // Just does a color - same thing
         m_graphics.SetVec4("color", { 1.0f, 1.0f, 1.0f, 1.0f });
         m_graphics.SetMatrix4("model", transform.AsMatrix());
 
@@ -280,8 +267,7 @@ namespace TombForge
             lines.emplace_back(LineVertex{ topBackLeft, color }, LineVertex{ topFrontLeft, color });
         }
 
-        //m_graphics.UseShader(m_lineShader.gpuHandle);
-        m_graphics.UseLineShader();
+        m_graphics.UseShader(m_lineShader);
 
         const glm::mat4 view = glm::inverse(camera.transform.AsMatrix());
         m_graphics.SetMatrix4("view", view);
@@ -327,7 +313,7 @@ namespace TombForge
         lines.emplace_back(LineVertex{ topBackRight, color }, LineVertex{ topBackLeft, color });
         lines.emplace_back(LineVertex{ topBackLeft, color }, LineVertex{ topFrontLeft, color });
 
-        m_graphics.UseShader(m_lineShader.gpuHandle);
+        m_graphics.UseShader(m_lineShader);
 
         const glm::mat4 view = glm::inverse(camera.transform.AsMatrix());
         m_graphics.SetMatrix4("view", view);
@@ -342,48 +328,46 @@ namespace TombForge
 
     void Renderer::InitializeShaders()
     {
-        m_skinnedShader.vertexSource = FileIO::ReadEntireFile(SkinnedVertexShaderPath);
-        m_skinnedShader.fragmentSource = FileIO::ReadEntireFile(BaseFragmentShaderPath);
-        m_graphics.InitializeShader(m_skinnedShader);
+        ShaderCache::Get().Initialize();
+        m_baseShader = ShaderCache::Get().GetStaticMeshShader();
+        m_skinnedShader = ShaderCache::Get().GetSkinnedMeshShader();
+        m_depthShader = ShaderCache::Get().GetDepthShader();
+        m_lineShader = ShaderCache::Get().GetLineShader();
+        m_gizmoShader = ShaderCache::Get().GetGizmoShader();
+        m_graphics.UseShader(m_skinnedShader);
 
-        m_lineShader.vertexSource = FileIO::ReadEntireFile(LineVertexShaderPath);
-        m_lineShader.fragmentSource = FileIO::ReadEntireFile(ColorFragmentShaderPath);
-        m_graphics.InitializeShader(m_lineShader);
+        m_skinnedLocations.albedoTexture = m_graphics.GetLocation(m_skinnedShader, "diffuseTexture");
+        m_skinnedLocations.normalTexture = m_graphics.GetLocation(m_skinnedShader, "normalTexture");
+        m_skinnedLocations.roughnessTexture = m_graphics.GetLocation(m_skinnedShader, "roughnessTexture");
+        m_skinnedLocations.metalnessTexture = m_graphics.GetLocation(m_skinnedShader, "metalnessTexture");
 
-        m_gizmoShader.vertexSource = FileIO::ReadEntireFile(BaseVertexShaderPath);
-        m_gizmoShader.fragmentSource = FileIO::ReadEntireFile(GizmoFragmentShaderPath);
-        m_graphics.InitializeShader(m_gizmoShader);
+        m_skinnedLocations.albedoColor = m_graphics.GetLocation(m_skinnedShader, "material.albedoColor");
+        m_skinnedLocations.roughnessValue = m_graphics.GetLocation(m_skinnedShader, "material.roughnessValue");
+        m_skinnedLocations.metalnessValue = m_graphics.GetLocation(m_skinnedShader, "material.metalnessValue");
 
-        m_depthShader.vertexSource = FileIO::ReadEntireFile(DepthVertexShaderPath);
-        m_depthShader.fragmentSource = FileIO::ReadEntireFile(GizmoFragmentShaderPath);
-        m_graphics.InitializeShader(m_depthShader);
+        m_skinnedLocations.lights = m_graphics.GetLocation(m_skinnedShader, "lightsTexture");
+        m_skinnedLocations.numLights = m_graphics.GetLocation(m_skinnedShader, "numLights");
+        m_skinnedLocations.lightIndices[0] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[0]");
+        m_skinnedLocations.lightIndices[1] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[1]");
+        m_skinnedLocations.lightIndices[2] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[2]");
+        m_skinnedLocations.lightIndices[3] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[3]");
+        m_skinnedLocations.lightIndices[4] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[4]");
+        m_skinnedLocations.lightIndices[5] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[5]");
+        m_skinnedLocations.lightIndices[6] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[6]");
+        m_skinnedLocations.lightIndices[7] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[7]");
 
-        m_graphics.UseShader(m_skinnedShader.gpuHandle);
+        m_skinnedLocations.modelMatrix = m_graphics.GetLocation(m_skinnedShader, "model");
+        m_skinnedLocations.viewMatrix = m_graphics.GetLocation(m_skinnedShader, "view");
+        m_skinnedLocations.projectMatrix = m_graphics.GetLocation(m_skinnedShader, "projection");
 
-        m_skinnedLocations.diffuse = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "diffuseTexture");
-        m_skinnedLocations.normal = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "normalTexture");
-        m_skinnedLocations.lights = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightsTexture");
+        m_skinnedLocations.ambientColor = m_graphics.GetLocation(m_skinnedShader, "ambientColor");
+        m_skinnedLocations.ambientIntensity = m_graphics.GetLocation(m_skinnedShader, "ambientStrength");
 
-        m_skinnedLocations.numLights = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "numLights");
-        m_skinnedLocations.lightIndices[0] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[0]");
-        m_skinnedLocations.lightIndices[1] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[1]");
-        m_skinnedLocations.lightIndices[2] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[2]");
-        m_skinnedLocations.lightIndices[3] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[3]");
-        m_skinnedLocations.lightIndices[4] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[4]");
-        m_skinnedLocations.lightIndices[5] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[5]");
-        m_skinnedLocations.lightIndices[6] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[6]");
-        m_skinnedLocations.lightIndices[7] = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "lightIndices[7]");
+        m_skinnedLocations.dirLightColor = m_graphics.GetLocation(m_skinnedShader, "dirLight.color");
+        m_skinnedLocations.dirLightDirection = m_graphics.GetLocation(m_skinnedShader, "dirLight.direction");
+        m_skinnedLocations.dirLightIntensity = m_graphics.GetLocation(m_skinnedShader, "dirLight.strength");
 
-        m_skinnedLocations.modelMatrix = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "model");
-        m_skinnedLocations.viewMatrix = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "view");
-        m_skinnedLocations.projectMatrix = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "projection");
-
-        m_skinnedLocations.ambientColor = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "ambientColor");
-        m_skinnedLocations.ambientIntensity = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "ambientStrength");
-
-        m_skinnedLocations.dirLightColor = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "dirLight.color");
-        m_skinnedLocations.dirLightDirection = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "dirLight.direction");
-        m_skinnedLocations.dirLightIntensity = m_graphics.GetLocation(m_skinnedShader.gpuHandle, "dirLight.strength");
+        m_skinnedLocations.cameraPosition = m_graphics.GetLocation(m_skinnedShader, "cameraPosition");
     }
 
     void Renderer::InitializeDefaultTextures()
@@ -395,6 +379,7 @@ namespace TombForge
         m_whiteTexture.data.emplace_back(white);
         m_whiteTexture.data.emplace_back(white);
         m_whiteTexture.data.emplace_back(white);
+        m_whiteTexture.sRGB = true;
         m_whiteTexture.gpuHandle = m_graphics.CreateTextureInstance(m_whiteTexture);
 
         // Setup (error) magenta texture
@@ -403,6 +388,7 @@ namespace TombForge
         m_magentaTexture.data.emplace_back(white);
         m_magentaTexture.data.emplace_back(0);
         m_magentaTexture.data.emplace_back(white);
+        m_magentaTexture.sRGB = true;
         m_magentaTexture.gpuHandle = m_graphics.CreateTextureInstance(m_magentaTexture);
 
         // Setup flat normal map
@@ -411,7 +397,16 @@ namespace TombForge
         m_flatNormal.data.emplace_back(128);
         m_flatNormal.data.emplace_back(128);
         m_flatNormal.data.emplace_back(255);
+        m_flatNormal.sRGB = false;
         m_flatNormal.gpuHandle = m_graphics.CreateTextureInstance(m_flatNormal);
+
+        // Setup white single channel texture (for roughness and metallic)
+        m_singleChannelWhite.width = m_singleChannelWhite.height = 1;
+        m_singleChannelWhite.format = TextureFormat::R;
+        m_singleChannelWhite.data.emplace_back(255);
+        m_singleChannelWhite.sRGB = false;
+        m_singleChannelWhite.filter = TextureFilter::Nearest;
+        m_singleChannelWhite.gpuHandle = m_graphics.CreateTextureInstance(m_singleChannelWhite);
     }
 
     void Renderer::SubmitLightsTexture(const std::vector<PointLight>& lights)
@@ -486,7 +481,7 @@ namespace TombForge
             auto& meshInfo = level.meshes[objIndex];
             auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
             m_graphics.SetMatrix4(m_skinnedLocations.modelMatrix, level.meshes[objIndex].modelMatrix);
-            DrawMesh(mesh, level.meshes[objIndex].lights, meshInfo.overrideMaterial ? meshInfo.overrideMaterial.get() : nullptr);
+            DrawMesh(mesh, meshInfo.lights, meshInfo.lightCount, meshInfo.overrideMaterial ? meshInfo.overrideMaterial.get() : nullptr);
         }
 
         for (uint32_t objIndex : transparent)
@@ -494,46 +489,85 @@ namespace TombForge
             auto& meshInfo = level.meshes[objIndex];
             auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
             m_graphics.SetMatrix4(m_skinnedLocations.modelMatrix, level.meshes[objIndex].modelMatrix);
-            DrawMesh(mesh, level.meshes[objIndex].lights, meshInfo.overrideMaterial ? meshInfo.overrideMaterial.get() : nullptr);
+            DrawMesh(mesh, meshInfo.lights, meshInfo.lightCount, meshInfo.overrideMaterial ? meshInfo.overrideMaterial.get() : nullptr);
         }
     }
 
     void Renderer::SetMaterial(const Material& material)
     {
-        if (material.TestFlag(MATERIAL_FLAG_DIFFUSE))
+        if (material.albedoTexture)
         {
-            const auto& diffuse = material.diffuse;
-            if (diffuse && diffuse->gpuHandle.IsValid())
-            {
-                m_graphics.SetTexture(m_skinnedLocations.diffuse, diffuse->gpuHandle, 0);
-            }
-            else
-            {
-                m_graphics.SetTexture(m_skinnedLocations.diffuse, m_whiteTexture.gpuHandle, 0);
-            }
+            const bool isValid = material.albedoTexture->gpuHandle.IsValid();
+            m_graphics.SetTexture(m_skinnedLocations.albedoTexture, isValid ? material.albedoTexture->gpuHandle : m_magentaTexture.gpuHandle, 0);
         }
         else
         {
-            m_graphics.SetTexture(m_skinnedLocations.diffuse, m_whiteTexture.gpuHandle, 0);
+            m_graphics.SetTexture(m_skinnedLocations.albedoTexture, m_whiteTexture.gpuHandle, 0);
+        }
+        m_graphics.SetVec4(m_skinnedLocations.albedoColor, material.albedoColor);
+
+        if (material.normalTexture)
+        {
+            const bool isValid = material.normalTexture->gpuHandle.IsValid();
+            m_graphics.SetTexture(m_skinnedLocations.normalTexture, isValid ? material.normalTexture->gpuHandle : m_flatNormal.gpuHandle, 1);
+        }
+        else
+        {
+            m_graphics.SetTexture(m_skinnedLocations.normalTexture, m_flatNormal.gpuHandle, 1);
         }
 
-        if (material.TestFlag(MATERIAL_FLAG_NORMAL))
+        if (material.roughnessTexture)
         {
-            const auto& normal = material.normal;
-            if (normal && normal->gpuHandle.IsValid())
-            {
-                m_graphics.SetTexture(m_skinnedLocations.normal, normal->gpuHandle, 1);
-            }
+            const bool isValid = material.roughnessTexture->gpuHandle.IsValid();
+            m_graphics.SetTexture(m_skinnedLocations.roughnessTexture, isValid ? material.roughnessTexture->gpuHandle : m_singleChannelWhite.gpuHandle, 2);
+            m_graphics.SetFloat(m_skinnedLocations.roughnessValue, 1.0f); // Ignore roughness value if using texture
         }
         else
         {
-            m_graphics.SetTexture(m_skinnedLocations.normal, m_flatNormal.gpuHandle, 1);
+            m_graphics.SetTexture(m_skinnedLocations.roughnessTexture, m_singleChannelWhite.gpuHandle, 2);
+            m_graphics.SetFloat(m_skinnedLocations.roughnessValue, material.roughnessValue);
+        }
+
+        if (material.metalnessTexture)
+        {
+            const bool isValid = material.metalnessTexture->gpuHandle.IsValid();
+            m_graphics.SetTexture(m_skinnedLocations.metalnessTexture, isValid ? material.metalnessTexture->gpuHandle : m_singleChannelWhite.gpuHandle, 3);
+            m_graphics.SetFloat(m_skinnedLocations.metalnessValue, 1.0f); // Ignore metallic value if using texture
+        }
+        else
+        {
+            m_graphics.SetTexture(m_skinnedLocations.metalnessTexture, m_singleChannelWhite.gpuHandle, 3);
+            m_graphics.SetFloat(m_skinnedLocations.metalnessValue, material.metalnessValue);
+        }
+    }
+
+    void Renderer::InitializeMaterial(Material& material)
+    {
+        if (material.albedoTexture && !material.albedoTexture->gpuHandle.IsValid())
+        {
+            material.albedoTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.albedoTexture);
+        }
+
+        if (material.normalTexture && !material.normalTexture->gpuHandle.IsValid())
+        {
+            material.normalTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.normalTexture);
+        }
+
+        if (material.roughnessTexture && !material.roughnessTexture->gpuHandle.IsValid())
+        {
+            material.roughnessTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.roughnessTexture);
+        }
+
+        if (material.metalnessTexture && !material.metalnessTexture->gpuHandle.IsValid())
+        {
+            material.metalnessTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.metalnessTexture);
         }
     }
 
     void Renderer::DrawModel(const Model& model,
         const Transform& transform, 
         const MeshLightArray& lightIndices,
+        const uint8_t lightCount,
         bool transparentPass,
         const std::vector<glm::mat4>* boneMatrices)
     {
@@ -573,7 +607,7 @@ namespace TombForge
                 glDisable(GL_CULL_FACE);
             }
 
-            DrawMesh(mesh, lightIndices);
+            DrawMesh(mesh, lightIndices, lightCount);
 
             if (mesh.isDoubleSided)
             {
@@ -608,7 +642,7 @@ namespace TombForge
         }
     }
 
-    void Renderer::DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices, const Material* overrideMaterial)
+    void Renderer::DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices, uint8_t lightCount, const Material* overrideMaterial)
     {
         if (!mesh.isActive || !mesh.gpuHandle.IsValid())
         {
@@ -658,7 +692,7 @@ namespace TombForge
             }
             m_graphics.SetInt(location, lightIndices[i]);
         }
-        m_graphics.SetInt(m_skinnedLocations.numLights, lightIndices.size() < 8 ? lightIndices.size() : 8);
+        m_graphics.SetInt(m_skinnedLocations.numLights, lightCount);
 
         if (mesh.isDoubleSided)
         {

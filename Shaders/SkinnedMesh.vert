@@ -22,16 +22,16 @@ uniform mat4 view;
 uniform mat4 projection;
 uniform mat4 finalBonesMatrices[MAX_BONES];
 
-invariant gl_Position;
+invariant gl_Position; // Keeps the position consistent if doing multiple render passes
 
 void main()
 {
-	vec4 basePosition = vec4(aPosition, 1.0f);
+	vec4 basePosition = vec4(aPosition, 1.0);
 
-	vec4 resultPosition = vec4(0.0f);
-	vec3 resultNormal = vec3(0.0f);
-	vec3 resultTangent = vec3(0.0f);
-	vec3 resultBitangent = vec3(0.0f);
+	vec4 resultPosition = vec4(0.0);
+	vec3 resultNormal = vec3(0.0);
+	vec3 resultTangent = vec3(0.0);
+	vec3 resultBitangent = vec3(0.0);
 
 	// todo: remove the conditional with always valid weights/data
 	bool wasSkinned = false;

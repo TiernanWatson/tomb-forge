@@ -159,6 +159,9 @@
     <ClCompile Include="Core\Graphics\Triangle.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Rendering\ShaderCache.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Levels\Level.h">
@@ -341,23 +344,25 @@
     <ClInclude Include="Core\Graphics\Triangle.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Engine\Rendering\ShaderCache.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Shaders\BaseFragmentShader.glsl">
+    <None Include="Shaders\ForwardLit_Phong.frag">
       <Filter>Resource Files</Filter>
     </None>
-    <None Include="Shaders\BaseVertexShader.glsl">
+    <None Include="Shaders\StaticMesh.vert">
       <Filter>Resource Files</Filter>
     </None>
     <None Include="ThirdParty\imgui\misc\debuggers\imgui.natstepfilter" />
     <None Include="ThirdParty\imgui\misc\debuggers\imgui.gdb" />
-    <None Include="Shaders\SkinnedVertexShader.glsl" />
-    <None Include="Shaders\ColorFragmentShader.glsl" />
-    <None Include="Shaders\LineVertexShader.glsl" />
+    <None Include="Shaders\SkinnedMesh.vert" />
+    <None Include="Shaders\VertexColorUnlit.frag" />
+    <None Include="Shaders\PositionColor.vert" />
     <None Include="packages.config" />
-    <None Include="Shaders\GizmoFragmentShader.glsl" />
-    <None Include="Shaders\DepthFragmentShader.glsl" />
-    <None Include="Shaders\DepthVertexShader.glsl" />
+    <None Include="Shaders\UniformColorUnlit.frag" />
+    <None Include="Shaders\ForwardLit_PBR.frag" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ThirdParty\imgui\misc\debuggers\imgui.natvis" />
