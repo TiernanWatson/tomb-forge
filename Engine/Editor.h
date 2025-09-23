@@ -70,6 +70,8 @@ namespace TombForge
         void SaveProject();
         void UnloadProject();
 
+        void NewLevel();
+
         void OnProjectDirectoryUpdate(const std::string& directory);
         void OnObjectTransformUpdate(size_t index);
         void OnLaraTransformUpdate();

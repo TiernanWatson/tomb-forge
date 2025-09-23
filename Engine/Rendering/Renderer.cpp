@@ -75,6 +75,8 @@ namespace TombForge
 
     void Renderer::DeloadLevel(Level& level)
     {
+        m_octTree.nodes.clear();
+
         for (auto& meshInfo : level.meshes)
         {
             auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
@@ -148,7 +150,8 @@ namespace TombForge
 
             Transform finalTransform = lara.transform;
             finalTransform.rotation *= glm::quat(lara.modelRotationOffset);
-            DrawModel(*lara.model.get(), finalTransform, lightIndices, false, &lara.animPlayer.FinalBoneMatrices());
+            DrawModel(*lara.model.get(), finalTransform, lightIndices, lightCount, false, &lara.animPlayer.FinalBoneMatrices());
+            DrawModel(*lara.model.get(), finalTransform, lightIndices, lightCount, true, &lara.animPlayer.FinalBoneMatrices());
         }
     }
 

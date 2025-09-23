@@ -421,7 +421,7 @@ namespace TombForge
                 ImGui::Separator();
                 if (ImGui::MenuItem("New Level"))
                 {
-
+                    NewLevel();
                 }
                 if (ImGui::MenuItem("Load Level"))
                 {
@@ -1483,6 +1483,7 @@ namespace TombForge
                 }
             }
             ImGui::Checkbox("Is Active", &mesh.isActive);
+            ImGui::Checkbox("Is Doublesided", &mesh.isDoubleSided);
             if (ImGui::Button("Delete"))
             {
                 m_model->meshes.erase(m_model->meshes.begin() + i);
@@ -1736,6 +1737,13 @@ namespace TombForge
 
         m_project = {};
         m_modelImporter.Finish();
+    }
+
+    void Editor::NewLevel()
+    {
+        UnloadLevel(m_ctx);
+        m_ctx.level = std::make_shared<Level>();
+        m_ctx.level->name = "Untitled Level";
     }
 
     void Editor::OnProjectDirectoryUpdate(const std::string& directory)
