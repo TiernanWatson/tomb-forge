@@ -18,13 +18,12 @@
 #include "Core/Maths/Transform.h"
 #include "Engine/Assets/AssetId.h"
 #include "Engine/Audio/Sound.h"
+#include "Engine/Levels/CollisionMesh.h"
 #include "Engine/Rendering/Model.h"
 
 // These Win32 macros conflict with camera code
 #undef near
 #undef far
-
-struct GLFWwindow;
 
 namespace TombForge
 {
@@ -84,9 +83,8 @@ namespace TombForge
     struct MeshCollider
     {
         Transform transform{};
-        std::vector<glm::vec3> vertices{};
-        std::vector<uint32_t> indices{};
         JPH::BodyID rigidbody{};
+        uint32_t mesh{}; // Index into collision mesh array
     };
 
     struct Collision
@@ -133,10 +131,9 @@ namespace TombForge
         std::vector<MeshInstance> meshes{};
 
         // Colliders
+        std::vector<std::shared_ptr<CollisionMesh>> collisionMeshes{};
         std::vector<BoxCollider> boxColliders{};
         std::vector<MeshCollider> meshColliders{};
-
-        // Triggers
         std::vector<LedgePoint> ledges{};
 
         // Lights

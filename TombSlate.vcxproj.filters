@@ -87,16 +87,10 @@
     <ClCompile Include="Engine\Animation\AnimPlayer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Player\Lara.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Engine\Assets\TextureImport.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Core\IO\DevIO.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Animation\AnimMachine.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Rendering\JoltDebugRenderer.cpp">
@@ -136,9 +130,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Assets\AssetRegistry.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Engine\Assets\AssetId.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Engine.cpp">
@@ -248,9 +239,6 @@
     <ClInclude Include="Core\IO\DevIO.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Animation\AnimMachine.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Engine\Rendering\JoltDebugRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -345,6 +333,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Rendering\ShaderCache.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Animation\AnimationSet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Player\LaraConfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Levels\CollisionMesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

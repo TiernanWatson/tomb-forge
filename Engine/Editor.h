@@ -6,11 +6,13 @@
 #include <vector>
 
 #include "Engine/Assets/ModelImporter.h"
+#include "Engine/Player/LaraConfig.h"
 #include "Engine/ProjectSettings.h"
 
 namespace TombForge
 {
     struct Animation;
+    struct AnimationSet;
     struct Material;
     struct Model;
     struct Texture;
@@ -32,6 +34,15 @@ namespace TombForge
         Translate = 1,
         Rotation = 2,
         Scale = 4,
+    };
+
+    enum class ObjectType : uint8_t
+    {
+        Mesh,
+        PointLight,
+        BoxCollider,
+        MeshCollider,
+        LedgePoint
     };
 
     /// Responsible for taking user editor input, modifying engine state, and drawing editor windows.
@@ -64,6 +75,8 @@ namespace TombForge
         void DrawRegistryWindow();
         void DrawLevelWindow();
         void DrawTextureWindow();
+        void DrawAnimSetWindow();
+        void DrawLaraConfigWindow();
 
         void NewProject(const std::string& path);
         void LoadProject(const std::string& settingsPath);
@@ -80,6 +93,8 @@ namespace TombForge
         void HandleMouseButton(int button, int action, int mods);
         void HandleScroll(float scroll);
 
+        bool DrawTransitionUI(AnimSetTransition& transition);
+
         EngineContext& m_ctx;
 
         AssetImportSession m_modelImporter{};
@@ -90,10 +105,12 @@ namespace TombForge
         std::shared_ptr<Animation> m_animation{}; // Animation being edited in the editor, if any
         std::shared_ptr<Texture> m_texture{}; // Texture being edited in the editor, if any
         std::shared_ptr<Model> m_model{}; // Model being edited in the editor, if any
+        std::shared_ptr<AnimationSet> m_animSet{}; // Animation set being edited in the editor, if any
 
         JoltDebugRenderer* m_physicsDebugRenderer{};
 
         ProjectSettings m_project{};
+        LaraConfig m_laraConfig{};
 
         size_t m_selectedObject{};
         size_t m_selectedPointLight{};
@@ -110,6 +127,8 @@ namespace TombForge
         bool m_showModelWindow : 1{};
         bool m_showLevelWindow : 1{};
         bool m_showTextureWindow : 1{};
+        bool m_showAnimSetWindow : 1{};
+        bool m_showLaraConfigWindow : 1{};
 
         bool m_showColliders : 1{};
         bool m_showMeshWireframe : 1{}; // Not the collider
@@ -118,5 +137,6 @@ namespace TombForge
 
         Axis m_selectedAxis{ Axis::None };
         SelectMode m_selectMode{ SelectMode::Translate };
+        ObjectType m_selectType{ ObjectType::Mesh };
     };
 }

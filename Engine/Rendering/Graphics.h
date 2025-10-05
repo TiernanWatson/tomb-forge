@@ -78,7 +78,7 @@ namespace TombForge
     public:
         static Graphics& Get();
 
-        void Initialize();
+        void Initialize(int width, int height);
 
         // Pipeline Settings
 

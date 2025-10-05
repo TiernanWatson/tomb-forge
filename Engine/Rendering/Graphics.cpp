@@ -64,8 +64,9 @@ namespace TombForge
         return graphics;
     }
 
-    void Graphics::Initialize()
+    void Graphics::Initialize(int width, int height)
     {
+        glViewport(0, 0, width, height);
         glEnable(GL_DEPTH_TEST);
 
         glEnable(GL_CULL_FACE);
@@ -212,7 +213,7 @@ namespace TombForge
         glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(LineVertex), (void*)offsetof(LineVertex, color));
 
         // * 2 because the Line struct is made of two points and we send individual points to the shader
-        glDrawArrays(GL_LINES, 0, lines.size() * 2);
+        glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(lines.size() * 2));
 
         glBindBuffer(GL_ARRAY_BUFFER, 0);
         glBindVertexArray(0);
@@ -449,12 +450,12 @@ namespace TombForge
     void Graphics::SetMatrix4Array(const std::string& name, const std::vector<glm::mat4>& items)
     {
         GLuint id = glGetUniformLocation(m_activeShader, name.c_str());
-        glUniformMatrix4fv(id, items.size(), GL_FALSE, &(items[0][0][0]));
+        glUniformMatrix4fv(id, static_cast<GLsizei>(items.size()), GL_FALSE, &(items[0][0][0]));
     }
 
     void Graphics::SetMatrix4Array(ShaderLocation location, const std::vector<glm::mat4>& items)
     {
-        glUniformMatrix4fv(location, items.size(), GL_FALSE, &(items[0][0][0]));
+        glUniformMatrix4fv(location, static_cast<GLsizei>(items.size()), GL_FALSE, &(items[0][0][0]));
     }
 
     void Graphics::SetTexture(const std::string& name, const TextureHandle handle)
@@ -559,7 +560,7 @@ namespace TombForge
         if (CompileShader(vertex, fragment, programId))
         {
             m_shaders.emplace_back(programId);
-            uint16_t index = m_shaders.size() - 1;
+            uint16_t index = static_cast<uint16_t>(m_shaders.size() - 1);
             return ShaderHandle{ index, 1 };
         }
         return {};

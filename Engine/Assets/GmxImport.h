@@ -18,11 +18,14 @@ namespace TombForge
 
     struct GmxResult
     {
-        //std::shared_ptr<Model> geometry{}; // References to materials & textures filled out
         std::vector<std::shared_ptr<Model>> geometry{}; // References to materials & textures filled out
         std::vector<BoxCollider> boxColliders{};
-        std::vector<MeshCollider> meshColliders{};
+        std::vector<std::shared_ptr<CollisionMesh>> meshColliders{};
         std::vector<PointLight> lights{};
+
+        std::vector<std::string> modelSourcePaths{};
+        std::vector<std::vector<std::string>> materialSourcePaths{};
+        std::vector<std::vector<std::string>> textureSourcePaths{};
     };
 
     GmxResult ImportGmx(const std::string& filePath, const GmxImportSettings& settings);

@@ -13,11 +13,14 @@ namespace TombForge
 {
     struct Model;
     struct Animation;
+    struct AnimationSet;
     struct Texture;
     struct Material;
     struct Skeleton;
     struct Level;
     struct Sound;
+    struct LaraConfig;
+    struct CollisionMesh;
 
     enum AssetType : uint8_t
     {
@@ -29,11 +32,15 @@ namespace TombForge
         ASSET_TYPE_SKELETON = 5,
         ASSET_TYPE_LEVEL = 6,
         ASSET_TYPE_SOUND = 7,
+        ASSET_TYPE_ANIMATION_SET = 8,
+        ASSET_TYPE_CONFIG = 9,
+        ASSET_TYPE_COLLISION_MESH = 10,
     };
 
     struct AssetMeta
     {
         AssetId id{}; // Unique asset identifier
+        std::string name{}; // Friendly name for the asset (should match file name)
         std::string assetPath{}; // Engine format path
         std::string sourcePath{}; // Original source import path
         AssetType type{}; // Asset type e.g. model, texture, material, etc...
@@ -88,18 +95,14 @@ namespace TombForge
         template<typename T>
         void AddAssetBuiltin(std::shared_ptr<T> asset);
 
+        bool LoadLaraConfig(LaraConfig& config);
+        bool SaveLaraConfig(const LaraConfig& config) const;
+
         AssetId GetAssetId(const std::string& path) const;
+        std::string GetAssetName(const AssetId id) const;
+        std::string GetExtension(AssetType type) const;
 
     private:
-        template<AssetType T> struct AssetEnumToType;
-        template<> struct AssetEnumToType<ASSET_TYPE_MODEL> { using Type = Model; };
-        template<> struct AssetEnumToType<ASSET_TYPE_MATERIAL> { using Type = Material; };
-        template<> struct AssetEnumToType<ASSET_TYPE_TEXTURE> { using Type = Texture; };
-        template<> struct AssetEnumToType<ASSET_TYPE_ANIMATION> { using Type = Animation; };
-        template<> struct AssetEnumToType<ASSET_TYPE_SKELETON> { using Type = Skeleton; };
-        template<> struct AssetEnumToType<ASSET_TYPE_LEVEL> { using Type = Level; };
-        template<> struct AssetEnumToType<ASSET_TYPE_SOUND> { using Type = Sound; };
-
         template<typename T>
         struct AssetTraits;
 
@@ -132,6 +135,13 @@ namespace TombForge
         };
 
         template<>
+        struct AssetTraits<AnimationSet>
+        {
+            static constexpr AssetType Type = ASSET_TYPE_ANIMATION_SET;
+            static auto& GetMap(AssetRegistry& reg) { return reg.m_loadedAnimSets; }
+        };
+
+        template<>
         struct AssetTraits<Skeleton>
         {
             static constexpr AssetType Type = ASSET_TYPE_SKELETON;
@@ -150,6 +160,13 @@ namespace TombForge
         {
             static constexpr AssetType Type = ASSET_TYPE_SOUND;
             static auto& GetMap(AssetRegistry& reg) { return reg.m_loadedSounds; }
+        };
+
+        template<>
+        struct AssetTraits<CollisionMesh>
+        {
+            static constexpr AssetType Type = ASSET_TYPE_COLLISION_MESH;
+            static auto& GetMap(AssetRegistry& reg) { return reg.m_loadedCollisionMeshes; }
         };
 
         template<typename T>
@@ -183,6 +200,11 @@ namespace TombForge
         void WriteAsset(const Animation& asset, const AssetMeta& meta) const;
 
         template<>
+        std::shared_ptr<AnimationSet> LoadAsset(const AssetMeta& meta);
+        template<>
+        void WriteAsset(const AnimationSet& asset, const AssetMeta& meta) const;
+
+        template<>
         std::shared_ptr<Level> LoadAsset(const AssetMeta& meta);
         template<>
         void WriteAsset(const Level& asset, const AssetMeta& meta) const;
@@ -191,6 +213,11 @@ namespace TombForge
         std::shared_ptr<Sound> LoadAsset(const AssetMeta& meta);
         template<>
         void WriteAsset(const Sound& asset, const AssetMeta& meta) const;
+
+        template<>
+        std::shared_ptr<CollisionMesh> LoadAsset(const AssetMeta& meta);
+        template<>
+        void WriteAsset(const CollisionMesh& asset, const AssetMeta& meta) const;
 
         template<typename T>
         bool SaveAssetIfDirty(const AssetId id, AssetMeta& meta);
@@ -204,16 +231,17 @@ namespace TombForge
         std::unordered_map<AssetId, std::shared_ptr<Texture>> m_loadedTextures{};
         std::unordered_map<AssetId, std::shared_ptr<Material>> m_loadedMaterials{};
         std::unordered_map<AssetId, std::shared_ptr<Animation>> m_loadedAnimations{};
+        std::unordered_map<AssetId, std::shared_ptr<AnimationSet>> m_loadedAnimSets{};
         std::unordered_map<AssetId, std::shared_ptr<Skeleton>> m_loadedSkeletons{};
         std::unordered_map<AssetId, std::shared_ptr<Level>> m_loadedLevels{};
         std::unordered_map<AssetId, std::shared_ptr<Sound>> m_loadedSounds{};
+        std::unordered_map<AssetId, std::shared_ptr<CollisionMesh>> m_loadedCollisionMeshes{};
 
         std::string m_registryPath{};
         std::string m_basePath{};
 
         AssetId m_nextId{ ReservedAssetIdStart };
 
-        friend class Engine;
         friend class Editor;
     };
 
@@ -237,7 +265,7 @@ namespace TombForge
         if (asset)
         {
             asset->id = id;
-            asset->name = metaIt->second.assetPath;
+            asset->name = metaIt->second.name;
             map[id] = asset;
         }
 
@@ -283,6 +311,7 @@ namespace TombForge
         }
 
         WriteAsset<T>(*asset, metaIt->second);
+        asset->isDirty = false;
     }
 
     template<typename T>
@@ -316,18 +345,18 @@ namespace TombForge
 
         AssetMeta meta{};
         meta.id = exists ? possibleId : m_nextId++;
+        meta.name = asset->name;
         meta.assetPath = actualPath;
         meta.sourcePath = sourcePath;
         meta.type = AssetTraits<T>::Type;
 
         asset->id = meta.id;
-        asset->name = meta.assetPath;
-
         m_assets.emplace(std::make_pair(meta.id, meta));
 
         WriteAsset<T>(*asset, meta);
-
         AssetTraits<T>::GetMap(*this)[meta.id] = asset;
+
+        return meta.id;
     }
 
     template<typename T>
@@ -343,6 +372,7 @@ namespace TombForge
 
         AssetMeta meta{};
         meta.id = asset->id;
+        meta.name = asset->name;
         meta.assetPath = asset->name;
         meta.sourcePath = "";
         meta.type = AssetTraits<T>::Type;

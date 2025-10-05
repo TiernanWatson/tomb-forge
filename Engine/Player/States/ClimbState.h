@@ -13,8 +13,6 @@ namespace TombForge
 
         virtual void PreAnimationUpdate(LaraController& lara, float deltaTime) override;
 
-        virtual void UpdateAnimation(LaraController& lara, float deltaTime) override;
-
         virtual void PostAnimationUpdate(LaraController& lara, float deltaTime) override;
 
         virtual void Exit(LaraController& lara) override;

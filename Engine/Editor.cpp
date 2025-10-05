@@ -15,6 +15,7 @@
 #include "Core/IO/FileIO.h"
 #include "Core/Maths/Maths.h"
 #include "Engine/Animation/Animation.h"
+#include "Engine/Animation/AnimationSet.h"
 #include "Engine/Animation/Skeleton.h"
 #include "Engine/Audio/Sound.h"
 #include "Engine/Assets/GmxImport.h"
@@ -33,11 +34,13 @@ namespace TombForge
     {
         constexpr char const* SkeletonFileExt{ ".tfskel" };
         constexpr char const* AnimFileExt{ ".tfanim" };
+        constexpr char const* AnimSetFileExt{ ".tfanimset" };
         constexpr char const* ModelFileExt{ ".tfmod" };
         constexpr char const* TextureFileExt{ ".tftex" };
         constexpr char const* MaterialFileExt{ ".tfmat" };
         constexpr char const* LevelFileExt{ ".tflev" };
         constexpr char const* ProjectFileExt{ ".tfproj" };
+        constexpr char const* CollisionFileExt{ ".tfcol" };
 
         constexpr unsigned int NumTombSlateFiles{ 1 };
         constexpr unsigned int NumImportFiles{ 1 };
@@ -98,6 +101,75 @@ namespace TombForge
             ImGui::TextWrapped(fileLineString.c_str());
             ImGui::PopStyleColor();
         }
+
+        std::string AnimTransConditionToString(AnimationSet::Transition::Condition::Type condition)
+        {
+            switch (condition)
+            {
+            case AnimationSet::Transition::Condition::Type::OnFinish: return "OnFinish";
+            case AnimationSet::Transition::Condition::Type::SpeedGreater: return "SpeedGreater";
+            case AnimationSet::Transition::Condition::Type::SpeedLess: return "SpeedLess";
+            case AnimationSet::Transition::Condition::Type::TargetSpeedGreater: return "TargetSpeedGreater";
+            case AnimationSet::Transition::Condition::Type::TargetSpeedLess: return "TargetSpeedLess";
+            case AnimationSet::Transition::Condition::Type::OnGround: return "OnGround";
+            case AnimationSet::Transition::Condition::Type::OffGround: return "OffGround";
+            case AnimationSet::Transition::Condition::Type::TargetDirectionGreater: return "TargetDirectionGreater";
+            case AnimationSet::Transition::Condition::Type::TargetDirectionLess: return "TargetDirectionLess";
+            case AnimationSet::Transition::Condition::Type::WantsJump: return "WantsJump";
+            case AnimationSet::Transition::Condition::Type::TimeLeft: return "TimeLeft";
+            default: return "Unknown";
+            }
+        }
+
+        std::string LaraStateToString(LaraState state)
+        {
+            switch (state)
+            {
+            case LARA_STATE_LOCOMOTION: return "Locomotion";
+            case LARA_STATE_AIR: return "Air";
+            case LARA_STATE_CLIMB: return "Climb";
+            default: return "Unknown";
+            }
+        }
+
+        void AddAndSaveModel(AssetRegistry& reg, std::shared_ptr<Model> model, const std::string& folder)
+        {
+            if (model->IsValid())
+            {
+                return;
+            }
+
+            for (size_t m = 0; m < model->meshes.size(); m++)
+            {
+                auto& mesh = model->meshes[m];
+                if (mesh.material && !mesh.material->IsValid())
+                {
+                    if (mesh.material->albedoTexture && !mesh.material->albedoTexture->IsValid())
+                    {
+                        const std::string albedoPath = folder + mesh.material->albedoTexture->name + TextureFileExt;
+                        reg.AddAsset(mesh.material->albedoTexture, albedoPath, "");
+                    }
+
+                    if (mesh.material->normalTexture && !mesh.material->normalTexture->IsValid())
+                    {
+                        const std::string normalPath = folder + mesh.material->normalTexture->name + TextureFileExt;
+                        reg.AddAsset(mesh.material->normalTexture, normalPath, "");
+                    }
+
+                    if (mesh.material->metalnessTexture && !mesh.material->metalnessTexture->IsValid())
+                    {
+                        const std::string metalnessPath = folder + mesh.material->metalnessTexture->name + TextureFileExt;
+                        reg.AddAsset(mesh.material->metalnessTexture, metalnessPath, "");
+                    }
+
+                    const std::string materialPath = folder + mesh.material->name + MaterialFileExt;
+                    reg.AddAsset(mesh.material, materialPath, "");
+                }
+            }
+
+            const std::string modelPath = folder + model->name + ModelFileExt;
+            reg.AddAsset(model, modelPath, "");
+        }
     }
 
     Editor::Editor(EngineContext& ctx)
@@ -153,6 +225,7 @@ namespace TombForge
         {
             LoadProject(projectPath);
         }
+        m_ctx.laraController.Initialize();
     }
 
     void Editor::Update()
@@ -491,37 +564,54 @@ namespace TombForge
                     const std::string filePath = OpenFileDialog(AodFileTypes, NumAodFiles);
                     if (!filePath.empty())
                     {
-                        GmxResult result = ImportGmx(filePath, {});
-
-                        m_ctx.level->directionalLight.intensity = 0.0f;
-                        m_ctx.level->ambientStrength = 1.0f;
-                        m_ctx.level->ambientColor = SRGBToLinear(glm::vec3{ 0.1f, 0.1f, 0.1f });
-                        m_ctx.level->pointLights = std::move(result.lights);
-                        m_ctx.level->models = result.geometry;
-
-                        for (auto& model : result.geometry)
+                        const std::string outPath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles, true);
+                        if (!outPath.empty())
                         {
-                            m_ctx.level->models.emplace_back(model);
+                            GmxResult result = ImportGmx(filePath, {});
 
-                            for (size_t m = 0; m < model->meshes.size(); m++)
+                            std::shared_ptr<Level> gmxLevel = std::make_shared<Level>();
+                            gmxLevel->directionalLight.intensity = 0.0;
+                            gmxLevel->ambientStrength = 0.0f;
+                            gmxLevel->pointLights = std::move(result.lights);
+
+                            const std::string basePath = outPath + FileIO::Separator;
+
+                            for (size_t g = 0; g < result.geometry.size(); g++)
                             {
-                                auto& instance = m_ctx.level->meshes.emplace_back();
-                                instance.model = static_cast<uint32_t>(m_ctx.level->models.size() - 1);
-                                instance.mesh = m;
-                                instance.bounds = model->meshes[m].bounds;
-                                instance.modelMatrix = instance.transform.AsMatrix();
+                                auto& model = result.geometry[g];
+                                AddAndSaveModel(m_ctx.assetRegistry, model, basePath);
+                                for (size_t m = 0; m < model->meshes.size(); m++)
+                                {
+                                    auto& instance = gmxLevel->meshes.emplace_back();
+                                    instance.name = model->meshes[m].name;
+                                    instance.model = static_cast<uint32_t>(g);
+                                    instance.mesh = static_cast<uint32_t>(m);
+                                    instance.bounds = model->meshes[m].bounds;
+                                    instance.modelMatrix = glm::mat4(1.0f);
 
-                                const glm::vec3 lightReferencePosition = (instance.bounds.min + instance.bounds.max) / 2.0f;
-                                GetClosestLights(*m_ctx.level, lightReferencePosition, instance.lights, instance.lightCount);
+                                    const glm::vec3 boundsCenter = (instance.bounds.min + instance.bounds.max) / 2.0f;
+                                    GetClosestLights(*m_ctx.level, boundsCenter, instance.lights, instance.lightCount);
+                                }
                             }
+                            gmxLevel->models = std::move(result.geometry);
+
+                            for (auto it = result.meshColliders.begin(); it != result.meshColliders.end(); it++)
+                            {
+                                const std::string colPath = outPath + FileIO::Separator + (*it)->name + CollisionFileExt;
+                                if (AssetId id = m_ctx.assetRegistry.AddAsset<CollisionMesh>(*it, colPath, filePath); !IsValidAssetId(id))
+                                {
+                                    LOG_ERROR("Failed to add collision mesh to asset registry: %s, skipping.", colPath.c_str());
+                                    it = result.meshColliders.erase(it);
+                                    continue;
+                                }
+                                auto& instance = gmxLevel->meshColliders.emplace_back();
+                                instance.mesh = static_cast<uint32_t>(it - result.meshColliders.begin());
+                            }
+                            gmxLevel->collisionMeshes = std::move(result.meshColliders);
+
+                            m_ctx.assetRegistry.AddAsset<Level>(gmxLevel, basePath + FileIO::GetFileName(filePath) + LevelFileExt, filePath);
+                            LOG("Imported GMX file %s to %s", filePath.c_str(), outPath.c_str());
                         }
-
-                        m_ctx.renderer.InitializeLevel(*m_ctx.level);
-
-                        SetAndInitColliders(m_ctx, std::move(result.boxColliders));
-                        SetAndInitColliders(m_ctx, std::move(result.meshColliders));
-
-                        LOG("Imported GMX file %s", filePath.c_str());
                     }
                 }
                 if (ImGui::MenuItem("Import Texture"))
@@ -539,7 +629,7 @@ namespace TombForge
                                     const std::string outPath = OpenFileDialog({}, 0, true);
                                     if (!outPath.empty())
                                     {
-                                        const std::string absPath = outPath + "\\" + FileIO::GetFileName(*it) + TextureFileExt;
+                                        const std::string absPath = outPath + FileIO::Separator + FileIO::GetFileName(*it) + TextureFileExt;
                                         m_ctx.assetRegistry.AddAsset<Texture>(texture, absPath, *it);
                                         m_ctx.assetRegistry.Save();
                                     }
@@ -601,6 +691,15 @@ namespace TombForge
                         m_showAnimEditor = m_animation != nullptr;
                     }
                 }
+                if (ImGui::MenuItem("Edit Animation Set"))
+                {
+                    const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        m_animSet = m_ctx.assetRegistry.Load<AnimationSet>(filePath);
+                        m_showAnimSetWindow = m_animSet != nullptr;
+                    }
+                }
                 if (ImGui::MenuItem("Edit Model"))
                 {
                     const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
@@ -640,6 +739,26 @@ namespace TombForge
                         }
                     }
                 }
+                if (ImGui::MenuItem("New Animation Set"))
+                {
+                    const std::string filePath = SaveFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        m_animSet = std::make_shared<AnimationSet>();
+                        m_ctx.assetRegistry.AddAsset<AnimationSet>(m_animSet, filePath, "");
+                        if (m_animSet->IsValid())
+                        {
+                            m_showAnimSetWindow = true;
+                            m_ctx.assetRegistry.Save();
+                        }
+                        else
+                        {
+                            LOG_WARNING("Could not create animation set %s", filePath.c_str());
+                            m_animSet = nullptr;
+                            m_showAnimSetWindow = false;
+                        }
+                    }
+                }
                 if (m_ctx.level)
                 {
                     ImGui::Separator();
@@ -660,7 +779,7 @@ namespace TombForge
                                 {
                                     auto& instance = m_ctx.level->meshes.emplace_back();
                                     instance.name = model->meshes[i].name;
-                                    instance.model = m_ctx.level->models.size() - 1;
+                                    instance.model = static_cast<uint32_t>(m_ctx.level->models.size() - 1);
                                     instance.mesh = static_cast<uint32_t>(i);
                                     instance.bounds = model->meshes[i].bounds;
                                     instance.modelMatrix = instance.transform.AsMatrix();
@@ -683,7 +802,7 @@ namespace TombForge
 
                         auto& obj = m_ctx.level->meshes.emplace_back();
                         obj.name = "Cube";
-                        obj.model = m_ctx.level->models.size() - 1;
+                        obj.model = static_cast<uint32_t>(m_ctx.level->models.size() - 1);
                         obj.mesh = 0;
                         obj.bounds = cubeModel->meshes[0].bounds;
                         obj.modelMatrix = obj.transform.AsMatrix();
@@ -697,7 +816,17 @@ namespace TombForge
                 ImGui::EndMenu();
             }
 
-            if (ImGui::MenuItem("Lara Settings"))
+            if (ImGui::BeginMenu("Configs"))
+            {
+                if (ImGui::MenuItem("Lara"))
+                {
+                    m_ctx.assetRegistry.LoadLaraConfig(m_laraConfig);
+                    m_showLaraConfigWindow = true;
+                }
+                ImGui::EndMenu();
+            }
+
+            if (ImGui::MenuItem("Lara Instance"))
             {
                 m_showLaraWindow = true;
             }
@@ -750,6 +879,16 @@ namespace TombForge
         if (m_showTextureWindow)
         {
             DrawTextureWindow();
+        }
+
+        if (m_showAnimSetWindow)
+        {
+            DrawAnimSetWindow();
+        }
+
+        if (m_showLaraConfigWindow)
+        {
+            DrawLaraConfigWindow();
         }
 
         // Inspector
@@ -943,10 +1082,8 @@ namespace TombForge
 
         auto& anim = m_animation;
 
-        std::string nameOnly = anim->GetFileName();
-        if (ImGui::InputText("Name", &nameOnly))
+        if (ImGui::InputText("Name", &anim->name))
         {
-            anim->SetFileName(nameOnly);
             anim->isDirty = true;
         }
 
@@ -978,7 +1115,7 @@ namespace TombForge
         {
             EventKey& key = anim->events[i];
 
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
             if (ImGui::BeginCombo("Type", AnimEventToString((AnimEvent)key.value).c_str()))
             {
                 for (uint8_t eventType = 0; eventType < ANIM_EVENT_COUNT; eventType++)
@@ -1066,7 +1203,7 @@ namespace TombForge
                 {
                     for (size_t i = 0; i < m_ctx.level->meshes.size(); i++)
                     {
-                        ImGui::PushID(i);
+                        ImGui::PushID(static_cast<int>(i));
                         auto& staticObj = m_ctx.level->meshes[i];
                         bool selected = i == m_selectedObject;
                         auto& mesh = m_ctx.level->models[staticObj.model]->meshes[staticObj.mesh];
@@ -1140,6 +1277,35 @@ namespace TombForge
                     {
                         DeleteLevelObject(m_ctx, m_selectedObject);
                     }
+                }
+            }
+            ImGui::EndTabItem();
+        }
+        if (m_ctx.level && ImGui::BeginTabItem("Colliders"))
+        {
+            if (ImGui::BeginListBox("Box Colliders"))
+            {
+                for (size_t b = 0; b < m_ctx.level->boxColliders.size(); b++)
+                {
+                    bool selected = m_selectType == ObjectType::BoxCollider && m_selectedObject == b;
+                    if (ImGui::Selectable(std::to_string(b).c_str(), &selected))
+                    {
+                        m_selectedObject = b;
+                        m_selectType = ObjectType::BoxCollider;
+                    }
+                }
+                ImGui::EndListBox();
+            }
+            ImGui::SeparatorText("Details");
+            if (m_selectType == ObjectType::BoxCollider && m_selectedObject < m_ctx.level->boxColliders.size())
+            {
+                bool modified = false;
+                auto& collider = m_ctx.level->boxColliders[m_selectedObject];
+                modified |= ImGui::InputFloat3("Position", &collider.transform.position.x);
+                modified |= ImGui::InputFloat3("Extents", &collider.halfExtents.x);
+                if (modified)
+                {
+                    
                 }
             }
             ImGui::EndTabItem();
@@ -1425,7 +1591,7 @@ namespace TombForge
                 glm::quat offsetRotation{};
                 glm::decompose(bone.offset, offsetScale, offsetRotation, offsetPosition, skew, perspective);
 
-                ImGui::PushID(b);
+                ImGui::PushID(static_cast<int>(b));
                 ImGui::Text("Bone %zu: %s (parent: %i)", b, bone.name.c_str(), bone.parent);
 
                 ImGui::Text("Transform");
@@ -1469,7 +1635,7 @@ namespace TombForge
         for (size_t i = 0; i < m_model->meshes.size(); i++)
         {
             auto& mesh = m_model->meshes[i];
-            ImGui::PushID(i);
+            ImGui::PushID(static_cast<int>(i));
             ImGui::Text("Mesh %i: %s", i, mesh.name.c_str());
             ImGui::Text("Material: %s", mesh.material ? mesh.material->name.c_str() : "Empty");
 
@@ -1507,9 +1673,12 @@ namespace TombForge
         ImGui::Text("Total Assets: %zu", m_ctx.assetRegistry.m_assets.size());
         ImGui::Separator();
 
-        ImGui::Columns(4, "AssetColumns");
+        ImGui::Columns(5, "AssetColumns");
 
         ImGui::Text("ID"); 
+        ImGui::NextColumn();
+
+        ImGui::Text("Name");
         ImGui::NextColumn();
 
         ImGui::Text("Type"); 
@@ -1526,6 +1695,9 @@ namespace TombForge
         for (const auto& [id, meta] : m_ctx.assetRegistry.m_assets)
         {
             ImGui::Text("%zu", id);
+            ImGui::NextColumn();
+
+            ImGui::TextUnformatted(meta.name.c_str());
             ImGui::NextColumn();
 
             // Convert AssetType to string
@@ -1657,6 +1829,225 @@ namespace TombForge
         {
             m_texture = nullptr;
             m_showTextureWindow = false;
+        }
+        ImGui::End();
+    }
+
+    void Editor::DrawAnimSetWindow()
+    {
+        ImGui::SetNextWindowSize({ 400.0f, 400.0f }, ImGuiCond_FirstUseEver);
+        ImGui::Begin("Anim Set Editor", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+        if (!m_animSet)
+        {
+            ImGui::Text("No anim set opened");
+            ImGui::End();
+            return;
+        }
+        ImGui::Text("Name: %s", m_animSet->name.c_str());
+        ImGui::SeparatorText("Animations");
+        for (size_t i = 0; i < m_animSet->animations.size(); i++)
+        {
+            uint32_t animId = static_cast<uint32_t>(i);
+            auto& anim = m_animSet->animations[i];
+            ImGui::PushID(animId);
+            ImGui::Text("Anim %zu: %s", i, anim ? anim->name.c_str() : "Empty");
+            if (ImGui::Button("Set Animation"))
+            {
+                const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                if (!filePath.empty())
+                {
+                    anim = m_ctx.assetRegistry.Load<Animation>(filePath);
+                    m_animSet->isDirty = true;
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Remove"))
+            {
+                for (auto it = m_animSet->transitions.begin(); it != m_animSet->transitions.end(); it++)
+                {
+                    if (it->ContainsFromAnimation(animId) || it->toAnimation == animId)
+                    {
+                        it = m_animSet->transitions.erase(it);
+                    }
+                }
+                m_animSet->animations.erase(m_animSet->animations.begin() + i);
+                i--;
+                m_animSet->isDirty = true;
+            }
+            ImGui::PopID();
+            ImGui::Separator();
+        }
+        if (ImGui::Button("Add Animation"))
+        {
+            m_animSet->animations.emplace_back();
+            m_animSet->isDirty = true;
+        }
+        ImGui::SeparatorText("Transitions");
+        for (size_t t = 0; t < m_animSet->transitions.size(); t++)
+        {
+            ImGui::PushID(static_cast<int>(t));
+            const std::string headerName = "Transition " + std::to_string(t);
+            if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_SpanFullWidth))
+            {
+                ImGui::Indent();
+                if (DrawTransitionUI(m_animSet->transitions[t]))
+                {
+                    m_animSet->isDirty = true;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Remove Transition"))
+                {
+                    m_animSet->transitions.erase(m_animSet->transitions.begin() + t);
+                    t--;
+                    m_animSet->isDirty = true;
+                }
+                ImGui::Unindent();
+            }
+            ImGui::PopID();
+        }
+        if (ImGui::Button("Add Transition"))
+        {
+            m_animSet->transitions.emplace_back();
+            m_animSet->isDirty = true;
+        }
+        ImGui::SeparatorText("Defaults");
+        if (ImGui::InputInt("Default Animation", (int*)&m_animSet->defaultAnimation))
+        {
+            m_animSet->isDirty = true;
+        }
+        if (ImGui::InputFloat("Default Blend Time", &m_animSet->defaultBlendTime, 0.01f, 0.1f, "%.2f"))
+        {
+            m_animSet->isDirty = true;
+        }
+        if (ImGui::InputFloat("Default Target Frame", &m_animSet->defaultTargetFrame, 0.1f, 1.0f, "%.2f"))
+        {
+            m_animSet->isDirty = true;
+        }
+        if (ImGui::Checkbox("Default Loop", &m_animSet->defaultShouldLoop))
+        {
+            m_animSet->isDirty = true;
+        }
+        if (ImGui::Checkbox("Default Should Blend", &m_animSet->defaultShouldBlend))
+        {
+            m_animSet->isDirty = true;
+        }
+        if (ImGui::Button("Save"))
+        {
+            m_ctx.assetRegistry.SaveAsset(m_animSet);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close"))
+        {
+            m_animSet = nullptr;
+            m_showAnimSetWindow = false;
+        }
+        ImGui::End();
+    }
+
+    void Editor::DrawLaraConfigWindow()
+    {
+        ImGui::SetNextWindowSizeConstraints({ 300, 300 }, { 600, 800 });
+        ImGui::Begin("Lara Configuration", nullptr, ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+        ImGui::Text("Model: %s", m_ctx.assetRegistry.GetAssetName(m_laraConfig.modelId).c_str());
+        if (ImGui::Button("Set Lara Model"))
+        {
+            const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+            if (!filePath.empty())
+            {
+                if (const AssetId id = m_ctx.assetRegistry.GetAssetId(filePath); IsValidAssetId(id))
+                {
+                    m_laraConfig.modelId = id;
+                    SetLaraModel(m_ctx, id);
+                }
+            }
+        }
+        ImGui::SeparatorText("Animation Sets");
+        for (const auto& [k, v] : m_laraConfig.animSetsForStates)
+        {
+            ImGui::PushID(static_cast<int>(k));
+            if (ImGui::BeginCombo("State", LaraStateToString(k).c_str()))
+            {
+                for (size_t s = 0; s < LARA_STATE_COUNT; s++)
+                {
+                    bool selected = k == s;
+                    if (ImGui::Selectable(LaraStateToString((LaraState)s).c_str(), &selected))
+                    {
+                        m_laraConfig.animSetsForStates.emplace((LaraState)s, v);
+                        m_laraConfig.animSetsForStates.erase(k);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::Text("Set %zu: %s", v, m_ctx.assetRegistry.GetAssetName(v).c_str());
+            ImGui::SameLine();
+            if (ImGui::Button("Change Set"))
+            {
+                const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                if (!filePath.empty())
+                {
+                    if (const AssetId id = m_ctx.assetRegistry.GetAssetId(filePath); IsValidAssetId(id))
+                    {
+                        m_laraConfig.animSetsForStates[k] = id;
+                    }
+                }
+            }
+            ImGui::PopID();
+        }
+        static int s_newState = 0;
+        ImGui::InputInt("New State", &s_newState); // Lara state ID
+        ImGui::SameLine();
+        if (ImGui::Button("Add State"))
+        {
+            if (m_laraConfig.animSetsForStates.find((LaraState)s_newState) == m_laraConfig.animSetsForStates.end())
+            {
+                m_laraConfig.animSetsForStates.emplace((LaraState)s_newState, InvalidAssetId);
+            }
+        }
+        ImGui::SeparatorText("Transition Maps");
+        int id = 0;
+        for (size_t t = 0; t < m_laraConfig.animSetEntries.size(); t++)
+        {
+            auto& trans = m_laraConfig.animSetEntries[t];
+            ImGui::PushID(id++);
+            if (ImGui::CollapsingHeader(("Transition Map " + std::to_string(t)).c_str(), ImGuiTreeNodeFlags_SpanFullWidth))
+            {
+                ImGui::Indent();
+                int fromSet = static_cast<int>(trans.fromAnimSetId);
+                if (ImGui::InputInt("From Set", &fromSet))
+                {
+                    trans.fromAnimSetId = fromSet;
+                }
+                ImGui::SameLine();
+                int toSet = static_cast<int>(trans.toAnimSetId);
+                if (ImGui::InputInt("To Set", &toSet))
+                {
+                    trans.toAnimSetId = toSet;
+                }
+                if (DrawTransitionUI(trans.transition))
+                {
+                }
+                if (ImGui::Button("Remove Transition"))
+                {
+                    m_laraConfig.animSetEntries.erase(m_laraConfig.animSetEntries.begin() + t);
+                    t--;
+                }
+                ImGui::Unindent();
+            }
+            ImGui::PopID();
+        }
+        if (ImGui::Button("Add Transition"))
+        {
+            m_laraConfig.animSetEntries.emplace_back();
+        }
+        ImGui::Separator();
+        if (ImGui::Button("Save"))
+        {
+            m_ctx.assetRegistry.SaveLaraConfig(m_laraConfig);
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close"))
+        {
+            m_showLaraConfigWindow = false;
         }
         ImGui::End();
     }
@@ -1793,6 +2184,7 @@ namespace TombForge
                 m_isEditMode = isEditor;
                 if (!m_isEditMode)
                 {
+                    SetMouseVisible(m_ctx.window, false);
                     if (m_ctx.level && m_ctx.level->ambientSound)
                     {
                         m_ctx.audioSystem.PlaySound(m_ctx.level->ambientSound, m_ctx.level->ambientSoundVolume, true);
@@ -1800,6 +2192,7 @@ namespace TombForge
                 }
                 else
                 {
+                    SetMouseVisible(m_ctx.window, true);
                     m_ctx.audioSystem.StopAllSounds();
                 }
             }
@@ -1887,5 +2280,99 @@ namespace TombForge
             m_ctx.freeCameraSpeed += scroll * ScrollIncreaseRate;
             m_ctx.freeCameraSpeed = Maths::Clamp(m_ctx.freeCameraSpeed, ScrollMinSpeed, ScrollMaxSpeed);
         }
+    }
+
+    bool Editor::DrawTransitionUI(AnimSetTransition& trans)
+    {
+        bool modified = false;
+        ImGui::SeparatorText("Animation Details");
+        for (size_t a = 0; a < trans.fromAnimations.size(); a++)
+        {
+            ImGui::PushID(static_cast<int>(a));
+            if (ImGui::InputInt("Source", (int*)&trans.fromAnimations[a]))
+            {
+                modified = true;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Remove"))
+            {
+                trans.fromAnimations.erase(trans.fromAnimations.begin() + a);
+                a--;
+                modified = true;
+            }
+            ImGui::PopID();
+        }
+        if (ImGui::Button("Add Source"))
+        {
+            trans.fromAnimations.emplace_back();
+            modified = true;
+        }
+        if (ImGui::InputInt("Target Anim", (int*)&trans.toAnimation))
+        {
+            modified = true;
+        }
+        if (ImGui::InputFloat("Blend Duration", &trans.blendDuration, 0.01f, 0.1f, "%.2f"))
+        {
+            modified = true;
+        }
+        if (ImGui::InputFloat("Target Frame", &trans.targetFrame, 0.1f, 1.0f, "%.2f"))
+        {
+            modified = true;
+        }
+        if (ImGui::InputFloat("Min Frames Elapsed", &trans.minFramesElapsed, 0.1f, 1.0f, "%.2f"))
+        {
+            modified = true;
+        }
+        if (ImGui::Checkbox("Loop Target", &trans.loop))
+        {
+            modified = true;
+        }
+        if (ImGui::Checkbox("Should Blend", &trans.shouldBlend))
+        {
+            modified = true;
+        }
+        ImGui::SeparatorText("Conditions");
+        for (size_t c = 0; c < trans.conditions.size(); c++)
+        {
+            auto& cond = trans.conditions[c];
+            const std::string condLabel = "Condition " + std::to_string(c);
+            if (ImGui::CollapsingHeader(condLabel.c_str(), ImGuiTreeNodeFlags_SpanFullWidth))
+            {
+                ImGui::PushID(static_cast<int>(c));
+                ImGui::Indent();
+                if (ImGui::BeginCombo("Condition", AnimTransConditionToString(cond.condition).c_str()))
+                {
+                    for (uint8_t c = 0; c < static_cast<uint8_t>(AnimationSet::Transition::Condition::Type::Count); c++)
+                    {
+                        auto enumVal = static_cast<AnimationSet::Transition::Condition::Type>(c);
+                        bool selected = cond.condition == enumVal;
+                        if (ImGui::Selectable(AnimTransConditionToString(enumVal).c_str(), &selected))
+                        {
+                            cond.condition = enumVal;
+                            modified = true;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                if (ImGui::InputFloat("Threshold", &cond.threshold, 0.1f, 1.0f, "%.2f"))
+                {
+                    modified = true;
+                }
+                if (ImGui::Button("Remove Condition"))
+                {
+                    trans.conditions.erase(trans.conditions.begin() + c);
+                    c--;
+                    modified = true;
+                }
+                ImGui::Unindent();
+                ImGui::PopID();
+            }
+        }
+        if (ImGui::Button("Add Condition"))
+        {
+            trans.conditions.emplace_back();
+            modified = true;
+        }
+        return modified;
     }
 }

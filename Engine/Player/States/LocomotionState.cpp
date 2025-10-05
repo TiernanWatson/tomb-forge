@@ -18,6 +18,10 @@ namespace TombForge
         const bool isWalk = Input::GetKey(GLFW_KEY_LEFT_ALT, GLFW_PRESS);
 
         m_wantsToJump = Input::GetKey(GLFW_KEY_SPACE, GLFW_PRESS);
+        if (m_wantsToJump)
+        {
+            lara.JumpRequested();
+        }
 
         m_moveInput = { leftKey + rightKey, 0.0f, forwardKey + backKey };
         if (isWalk)
@@ -36,150 +40,18 @@ namespace TombForge
         targetMove = cameraYRotation * targetMove;
 
         m_desiredVelocity = targetMove;
+        lara.SetTargetVelocity(m_desiredVelocity);
 
         m_targetSpeed = glm::length(targetMove);
-    }
-
-    void LocomotionState::UpdateAnimation(LaraController& lara, float deltaTime)
-    {
-        const float joystickSpeed = glm::length(m_moveInput);
-        const bool wantsToRun = joystickSpeed > m_runThreshold;
-        const bool wantsToWalk = !wantsToRun && joystickSpeed > m_walkThreshold;
-        const bool wantsToIdle = !wantsToRun && !wantsToWalk;
-
-        switch (lara.CurrentAnim())
-        {
-        case LARA_ANIM_IDLE:
-        {
-            if (wantsToRun)
-            {
-                lara.SetAnimation(LARA_ANIM_RUN_START);
-            }
-            else if (wantsToWalk)
-            {
-                lara.SetAnimation(LARA_ANIM_WALK_START);
-            }
-            break;
-        }
-        case LARA_ANIM_WALK_START:
-        {
-            if (lara.AnimTimeLeft() < 3.0f)
-            {
-                lara.SetAnimation(LARA_ANIM_WALK, 3.0f, true);
-            }
-            else if (wantsToIdle)
-            {
-                lara.SetAnimation(LARA_ANIM_IDLE, 3.0f, true);
-            }
-            else if (wantsToRun)
-            {
-                lara.SetAnimation(LARA_ANIM_RUN_START, 3.0f);
-            }
-            break;
-        }
-        case LARA_ANIM_WALK:
-        {
-            if (wantsToIdle)
-            {
-                lara.SetAnimation(LARA_ANIM_IDLE, 3.0f, true);
-            }
-            else if (wantsToRun)
-            {
-                lara.SetAnimation(LARA_ANIM_RUN, 12.0f);
-            }
-            else if (m_wantsToJump)
-            {
-                lara.SetAnimation(LARA_ANIM_RUN_TO_JUMP_L, 3.0f);
-            }
-            break;
-        }
-        case LARA_ANIM_RUN_START:
-        {
-            if (lara.AnimTimeLeft() < 3.0f)
-            {
-                lara.SetAnimation(LARA_ANIM_RUN, 3.0f, true);
-            }
-            else if (wantsToWalk)
-            {
-                lara.SetAnimation(LARA_ANIM_WALK, 3.0f, true);
-            }
-            else if (!wantsToRun && !wantsToWalk)
-            {
-                lara.SetAnimation(LARA_ANIM_IDLE, 3.0f, true);
-            }
-            break;
-        }
-        case LARA_ANIM_RUN:
-        {
-            if (wantsToIdle)
-            {
-                lara.SetAnimation(LARA_ANIM_IDLE, 3.0f, true);
-            }
-            else if (wantsToWalk)
-            {
-                lara.SetAnimation(LARA_ANIM_WALK, 12.0f, true);
-            }
-            else if (m_wantsToJump)
-            {
-                lara.SetAnimation(LARA_ANIM_RUN_TO_JUMP_L, 3.0f);
-            }
-            break;
-        }
-        case LARA_ANIM_RUN_JUMP_L:
-        case LARA_ANIM_RUN_JUMP_R:
-        case LARA_ANIM_JUMP_TO_FALL:
-        case LARA_ANIM_FALL:
-        {
-            if (wantsToRun)
-            {
-                lara.SetAnimation(LARA_ANIM_FALL_TO_RUN, 1.0f);
-            }
-            else
-            {
-                lara.SetAnimation(LARA_ANIM_FALL_TO_IDLE, 1.0f);
-            }
-            break;
-        }
-        case LARA_ANIM_FALL_TO_RUN:
-        {
-            if (lara.AnimTimeLeft() < 3.0f)
-            {
-                lara.SetAnimation(LARA_ANIM_RUN, 3.0f, true);
-            }
-            break;
-        }
-        case LARA_ANIM_FALL_TO_IDLE:
-        case LARA_ANIM_CLIMB_UP:
-        {
-            if (lara.AnimTimeLeft() < 1.0f)
-            {
-                lara.SetAnimation(LARA_ANIM_IDLE, 0.0f, true);
-            }
-            break;
-        }
-        case LARA_ANIM_RUN_TO_JUMP_L:
-        case LARA_ANIM_RUN_TO_JUMP_R:
-            break;
-        default:
-            lara.SetAnimation(LARA_ANIM_IDLE);
-            break;
-        }
     }
 
     void LocomotionState::PostAnimationUpdate(LaraController& lara, float deltaTime)
     {
         // Rotation
-        if (lara.CurrentAnim() == LARA_ANIM_RUN_TURN_L
-            || lara.CurrentAnim() == LARA_ANIM_RUN_TURN_R)
+        if (glm::length(m_desiredVelocity) > 0.01f)
         {
-            
-        }
-        else if (glm::length(m_desiredVelocity) > 0.01f)
-        {
-            float angle = glm::atan(m_desiredVelocity.x, m_desiredVelocity.z);
-
+            const float angle = glm::atan(m_desiredVelocity.x, m_desiredVelocity.z);
             const glm::quat targetRotation({ 0.0f, angle, 0.0f });
-
             lara.SetRotation(glm::slerp(lara.GetRotation(), targetRotation, deltaTime * 30.0f));
         }
 
@@ -188,7 +60,8 @@ namespace TombForge
 
         if (lara.GetRootMotionMode() != RootMotionMode::Off)
         {
-            glm::vec3 rootMove = lara.RootDelta() / deltaTime;
+            // todo: correct orientations so that root delta can be used as-is
+            glm::vec3 rootMove = lara.GetAnimPlayer().RootDelta() / deltaTime;
             actualVelocity.x = rootMove.x;
             actualVelocity.z = -rootMove.y;
 
@@ -200,31 +73,13 @@ namespace TombForge
         lara.SetVelocity(actualVelocity);
     }
 
-    void LocomotionState::PostPhysicsUpdate(LaraController& lara, float deltaTime, PhysicsInterface& physics)
-    {
-        if (lara.CurrentAnim() == LARA_ANIM_RUN_TO_JUMP_L && lara.AnimTimeLeft() < 3.0f)
-        {
-            FindLedge(lara.GetPosition(), -lara.GetForward(), physics);
-        }
-    }
-
     LaraState LocomotionState::ShouldTransition(LaraController& lara)
     {
-        if (lara.CurrentAnim() == LARA_ANIM_RUN_TO_JUMP_L && lara.AnimTimeLeft() < 3.0f)
+        // todo: remove the time left check here and so it is handled in a more robust way
+        if (!lara.IsGrounded() || (lara.GetAnimPlayer().IsAnimation("RunCompressToJumpL") && lara.GetAnimPlayer().TimeLeft() < 1.0f))
         {
-            glm::vec3 velocity = lara.GetVelocity();
-            velocity.y = 6.0f;
-            
-            lara.SetVelocity(velocity);
-
             return LARA_STATE_AIR;
         }
-        else if (!lara.IsGrounded() && lara.CurrentAnim() != LARA_ANIM_CLIMB_UP)
-        {
-            lara.SetAnimation(LARA_ANIM_FALL, 3.0f, true);
-            return LARA_STATE_AIR;
-        }
-
         return LaraBaseState::ShouldTransition(lara);
     }
 

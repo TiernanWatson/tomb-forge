@@ -7,7 +7,6 @@
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 
 #include "Core/Maths/Transform.h"
-#include "Engine/Animation/AnimMachine.h"
 #include "Engine/Assets/AssetRegistry.h"
 #include "Engine/Player/LaraEnums.h"
 #include "Engine/Player/States/LaraState.h"
@@ -31,21 +30,9 @@ namespace TombForge
         glm::vec3 actualVelocity{}; // Final output velocity of the frame to be fed to physics
         glm::vec3 modelRotationOffset{ glm::radians(-90.0f), 0.0f, 0.0f }; // Used by renderer to offset model
 
-        std::array<std::shared_ptr<Animation>, LARA_ANIM_COUNT> animations{}; // Indexed by anim id
-
-        std::vector<std::unique_ptr<LaraBaseState>> states{}; // NEW
-
         float cameraYaw{};
         float cameraPitch{};
         float health{}; // Current health 0.0 -> 1.0
-
-        LaraAnim animIndex{};
-        LaraWeapon weapon{};
-        uint32_t stateIndex{}; // NEW
-
-        void LoadAnimations(AssetRegistry& loader);
-        void SetAnimation(LaraAnim anim, float fadeTime = 0.0f, bool loop = false);
-        bool IsGrounded() const;
     };
 }
 

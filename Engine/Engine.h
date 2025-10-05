@@ -28,6 +28,7 @@ namespace TombForge
     struct EngineContext
     {
         static constexpr float DefaultCameraSpeed{ 10.0f };
+        static constexpr float DefaultFreeCameraSpeed{ 20.0f };
 
         Renderer renderer{};
         AssetRegistry assetRegistry{};
@@ -39,7 +40,7 @@ namespace TombForge
         std::shared_ptr<Level> level{};
 
         Lara lara{};
-        LaraController laraController{ &lara, &physicsInterface };
+        LaraController laraController{ &lara, &physicsInterface, &assetRegistry };
         Camera camera{};
 
         double previousTime{};
@@ -54,7 +55,7 @@ namespace TombForge
         float cameraPitch{};
         float cameraYaw{};
         float cameraSpeed{ DefaultCameraSpeed };
-        float freeCameraSpeed{ DefaultCameraSpeed };
+        float freeCameraSpeed{ DefaultFreeCameraSpeed };
         float deltaTime{};
         float totalTime{}; // Total simulation time, not wall-clock time
 
@@ -82,4 +83,6 @@ namespace TombForge
 
     void SetAndInitColliders(EngineContext& ctx, std::vector<BoxCollider>&& colliders);
     void SetAndInitColliders(EngineContext& ctx, std::vector<MeshCollider>&& colliders);
+
+    void SetMouseVisible(GLFWwindow* window, bool visible);
 }

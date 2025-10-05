@@ -66,7 +66,7 @@ namespace TombForge
         Renderer();
 
         // Initializes the renderer and graphics system
-        void Initialize();
+        void Initialize(int width, int height);
 
         // When a level is loaded, call this to set it up with the renderer
         bool InitializeLevel(Level& level);

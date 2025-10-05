@@ -10,12 +10,7 @@ namespace TombForge
     {
     public:
         virtual void PreAnimationUpdate(LaraController& lara, float deltaTime) override;
-
-        virtual void UpdateAnimation(LaraController& lara, float deltaTime) override;
-
         virtual void PostAnimationUpdate(LaraController& lara, float deltaTime) override;
-
-        virtual void PostPhysicsUpdate(LaraController& lara, float deltaTime, PhysicsInterface& physics) override;
 
         virtual LaraState ShouldTransition(LaraController& lara) override;
 

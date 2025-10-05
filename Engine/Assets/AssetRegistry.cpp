@@ -4,17 +4,100 @@
 #include <nlohmann/json.hpp>
 #include <sndfile.h>
 
+#include "Core/IO/BinaryReader.h"
+#include "Core/IO/BinaryWriter.h"
 #include "Core/IO/FileIO.h"
 #include "Engine/Animation/Animation.h"
+#include "Engine/Animation/AnimationSet.h"
 #include "Engine/Animation/Skeleton.h"
 #include "Engine/Audio/Sound.h"
+#include "Engine/Levels/CollisionMesh.h"
 #include "Engine/Levels/Level.h"
+#include "Engine/Player/LaraConfig.h"
 #include "Engine/Rendering/Material.h"
 #include "Engine/Rendering/Model.h"
 #include "Engine/Rendering/Texture.h"
 
 namespace TombForge
 {
+    namespace
+    {
+        constexpr char const* SkeletonFileExt{ ".tfskel" };
+        constexpr char const* AnimFileExt{ ".tfanim" };
+        constexpr char const* AnimSetFileExt{ ".tfanimset" };
+        constexpr char const* ModelFileExt{ ".tfmod" };
+        constexpr char const* TextureFileExt{ ".tftex" };
+        constexpr char const* MaterialFileExt{ ".tfmat" };
+        constexpr char const* LevelFileExt{ ".tflev" };
+        constexpr char const* ProjectFileExt{ ".tfproj" };
+        constexpr char const* CollisionFileExt{ ".tfcol" };
+
+        void SaveTransition(nlohmann::json& json, const AnimSetTransition& transition)
+        {
+            json["fromAnimations"] = transition.fromAnimations;
+            json["toAnimation"] = transition.toAnimation;
+            json["targetFrame"] = transition.targetFrame;
+            json["blendDuration"] = transition.blendDuration;
+            json["minFramesElapsed"] = transition.minFramesElapsed;
+            json["shouldBlend"] = transition.shouldBlend;
+            json["loop"] = transition.loop;
+            json["conditions"] = nlohmann::json::array();
+            for (const auto& condition : transition.conditions)
+            {
+                nlohmann::json& condJson = json["conditions"].emplace_back();
+                condJson["condition"] = static_cast<uint8_t>(condition.condition);
+                condJson["threshold"] = condition.threshold;
+            }
+        }
+
+        void LoadTransition(const nlohmann::json& json, AnimSetTransition& transition)
+        {
+            if (json.contains("fromAnimations"))
+            {
+                transition.fromAnimations = json["fromAnimations"].get<std::vector<uint32_t>>();
+            }
+            if (json.contains("toAnimation"))
+            {
+                transition.toAnimation = json["toAnimation"].get<uint32_t>();
+            }
+            if (json.contains("targetFrame"))
+            {
+                transition.targetFrame = json["targetFrame"].get<float>();
+            }
+            if (json.contains("blendDuration"))
+            {
+                transition.blendDuration = json["blendDuration"].get<float>();
+            }
+            if (json.contains("minFramesElapsed"))
+            {
+                transition.minFramesElapsed = json["minFramesElapsed"].get<float>();
+            }
+            if (json.contains("shouldBlend"))
+            {
+                transition.shouldBlend = json["shouldBlend"].get<bool>();
+            }
+            if (json.contains("loop"))
+            {
+                transition.loop = json["loop"].get<bool>();
+            }
+            if (json.contains("conditions"))
+            {
+                for (const auto& condJson : json["conditions"])
+                {
+                    auto& condition = transition.conditions.emplace_back();
+                    if (condJson.contains("condition"))
+                    {
+                        condition.condition = condJson["condition"].get<AnimSetTransition::Condition::Type>();
+                    }
+                    if (condJson.contains("threshold"))
+                    {
+                        condition.threshold = condJson["threshold"].get<float>();
+                    }
+                }
+            }
+        }
+    }
+
     void AssetRegistry::Init(const std::string& projectPath)
     {
         if (!FileIO::IsDirectory(projectPath))
@@ -23,7 +106,7 @@ namespace TombForge
             return;
         }
 
-        m_basePath = projectPath + "/";
+        m_basePath = projectPath + FileIO::Separator;
         m_registryPath = m_basePath + "assets.json";
 
         if (!FileIO::FileExists(m_registryPath))
@@ -34,7 +117,6 @@ namespace TombForge
         }
 
         std::ifstream inFile(m_registryPath);
-
         if (inFile.is_open())
         {
             nlohmann::json json = nlohmann::json::parse(inFile);
@@ -48,8 +130,16 @@ namespace TombForge
 
                 AssetMeta meta{};
                 meta.id = item["id"].get<AssetId>();
-                meta.sourcePath = item.contains("sourcePath") ? item["sourcePath"].get<std::string>() : "";
+                if (item.contains("name"))
+                {
+                    meta.name = item["name"].get<std::string>();
+                }
+                else
+                {
+                    meta.name = FileIO::GetFileName(item["assetPath"].get<std::string>());
+                }
                 meta.assetPath = item["assetPath"].get<std::string>();
+                meta.sourcePath = item.contains("sourcePath") ? item["sourcePath"].get<std::string>() : std::string{};
                 meta.type = static_cast<AssetType>(item["type"].get<uint8_t>());
                 m_assets.emplace(std::make_pair(meta.id, meta));
 
@@ -130,12 +220,21 @@ namespace TombForge
                     }
                     break;
                 }
+                case ASSET_TYPE_COLLISION_MESH:
+                {
+                    if (!SaveAssetIfDirty<CollisionMesh>(id, meta))
+                    {
+                        continue;
+                    }
+                    break;
+                }
                 case ASSET_TYPE_SOUND:
                     break; // No data to save for sounds yet
                 }
 
                 nlohmann::json item{};
                 item["id"] = meta.id;
+                item["name"] = meta.name;
                 item["sourcePath"] = meta.sourcePath;
                 item["assetPath"] = meta.assetPath;
                 item["type"] = static_cast<uint8_t>(meta.type);
@@ -148,6 +247,99 @@ namespace TombForge
         else
         {
             LOG_ERROR("Failed to open asset registry for writing: %s", m_registryPath.c_str());
+        }
+    }
+
+    bool AssetRegistry::LoadLaraConfig(LaraConfig& config)
+    {
+        const std::string path = m_basePath + "lara.json";
+        if (!FileIO::FileExists(path))
+        {
+#ifndef EDITOR_ENABLED
+            LOG_ERROR("Lara config file does not exist: %s", path.c_str());
+#endif
+            return false;
+        }
+
+        std::ifstream inFile(path);
+        if (inFile.is_open())
+        {
+            inFile.seekg(0, std::ios::end);
+            std::streampos fileSize = inFile.tellg();
+            inFile.seekg(0, std::ios::beg);
+            if (fileSize < 1)
+            {
+                return false;
+            }
+            nlohmann::json json = nlohmann::json::parse(inFile);
+            if (json.contains("modelId"))
+            {
+                config.modelId = json["modelId"].get<AssetId>();
+            }
+            if (json.contains("animationSets"))
+            {
+                config.animSetsForStates.clear();
+                for (const auto& entry : json["animationSets"])
+                {
+                    config.animSetsForStates.emplace(entry["state"].get<LaraState>(), entry["set"].get<AssetId>());
+                }
+            }
+            if (json.contains("transitionMaps"))
+            {
+                config.animSetEntries.clear();
+                for (const auto& entry : json["transitionMaps"])
+                {
+                    auto& key = config.animSetEntries.emplace_back();
+                    key.fromAnimSetId = entry["from"].get<AssetId>();
+                    key.toAnimSetId = entry["to"].get<AssetId>();
+                    LoadTransition(entry, key.transition);
+                }
+            }
+            inFile.close();
+            return true;
+        }
+        else
+        {
+            LOG_ERROR("Failed to open Lara config file: %s", path.c_str());
+            return false;
+        }
+    }
+
+    bool AssetRegistry::SaveLaraConfig(const LaraConfig& config) const
+    {
+        const std::string path = m_basePath + "lara.json";
+
+        std::ofstream outFile(path);
+        if (outFile.is_open())
+        {
+            nlohmann::json json{};
+            json["modelId"] = config.modelId;
+            json["animationSets"] = nlohmann::json::array();
+            for (const auto& [state, setId] : config.animSetsForStates)
+            {
+                nlohmann::json item{};
+                item["state"] = static_cast<uint32_t>(state);
+                item["set"] = setId;
+                json["animationSets"].emplace_back(item);
+            }
+            json["transitionMaps"] = nlohmann::json::array();
+            for (const auto& entry : config.animSetEntries)
+            {
+                nlohmann::json item{};
+                item["from"] = entry.fromAnimSetId;
+                item["to"] = entry.toAnimSetId;
+                SaveTransition(item, entry.transition);
+                json["transitionMaps"].emplace_back(item);
+            }
+            outFile << json.dump(4);
+            outFile.flush();
+            outFile.close();
+            return true;
+        }
+        else
+        {
+            LOG_ERROR("Failed to open Lara config file for writing: %s", path.c_str());
+            return false;
         }
     }
 
@@ -164,6 +356,34 @@ namespace TombForge
         }
 
         return InvalidAssetId;
+    }
+
+    std::string AssetRegistry::GetAssetName(const AssetId id) const
+    {
+        auto it = m_assets.find(id);
+        if (it == m_assets.end())
+        {
+            return "Not Registered";
+        }
+        return it->second.assetPath;
+    }
+
+    std::string AssetRegistry::GetExtension(AssetType type) const
+    {
+        switch (type)
+        {
+        case ASSET_TYPE_SKELETON:      return SkeletonFileExt;
+        case ASSET_TYPE_ANIMATION:     return AnimFileExt;
+        case ASSET_TYPE_ANIMATION_SET: return AnimSetFileExt;
+        case ASSET_TYPE_MODEL:         return ModelFileExt;
+        case ASSET_TYPE_TEXTURE:       return TextureFileExt;
+        case ASSET_TYPE_MATERIAL:      return MaterialFileExt;
+        case ASSET_TYPE_LEVEL:         return LevelFileExt;
+        case ASSET_TYPE_COLLISION_MESH:return CollisionFileExt;
+        case ASSET_TYPE_SOUND:         return ".wav";
+        case ASSET_TYPE_CONFIG:        return ProjectFileExt;
+        default:                       return ".tf";
+        }
     }
 
     std::string AssetRegistry::GetAbsolutePath(const std::string& path) const
@@ -660,6 +880,119 @@ namespace TombForge
     }
 
     template<>
+    std::shared_ptr<AnimationSet> AssetRegistry::LoadAsset(const AssetMeta& meta)
+    {
+        const std::string& filePath = GetAbsolutePath(meta.assetPath);
+
+        std::ifstream inFile(filePath, std::ios::binary);
+        if (inFile.is_open())
+        {
+            nlohmann::json json = nlohmann::json::parse(inFile);
+            std::shared_ptr<AnimationSet> resource = std::make_shared<AnimationSet>();
+
+            if (json.contains("animations") && json["animations"].is_array())
+            {
+                for (const auto& item : json["animations"])
+                {
+                    const AssetId animId = item.get<AssetId>();
+                    auto anim = Load<Animation>(animId);
+                    if (anim)
+                    {
+                        resource->animations.emplace_back(anim);
+                    }
+                }
+            }
+
+            if (json.contains("transitions") && json["transitions"].is_array())
+            {
+                for (const auto& transition : json["transitions"])
+                {
+                    LoadTransition(transition, resource->transitions.emplace_back());
+                }
+            }
+
+            if (json.contains("defaultAnimation"))
+            {
+                const AssetId defaultAnimId = json["defaultAnimation"].get<AssetId>();
+                for (size_t i = 0; i < resource->animations.size(); i++)
+                {
+                    if (resource->animations[i]->id == defaultAnimId)
+                    {
+                        resource->defaultAnimation = static_cast<int>(i);
+                        break;
+                    }
+                }
+            }
+
+            if (json.contains("defaultBlendTime"))
+            {
+                resource->defaultBlendTime = json["defaultBlendTime"].get<float>();
+            }
+
+            if (json.contains("defaultTargetFrame"))
+            {
+                resource->defaultTargetFrame = json["defaultTargetFrame"].get<float>();
+            }
+
+            if (json.contains("defaultShouldLoop"))
+            {
+                resource->defaultShouldLoop = json["defaultShouldLoop"].get<bool>();
+            }
+
+            if (json.contains("defaultShouldBlend"))
+            {
+                resource->defaultShouldBlend = json["defaultShouldBlend"].get<bool>();
+            }
+
+            inFile.close();
+            return resource;
+        }
+
+        LOG_ERROR("Failed to open animation file: %s", filePath.c_str());
+        return nullptr;
+    }
+
+    template<>
+    void AssetRegistry::WriteAsset(const AnimationSet& asset, const AssetMeta& meta) const
+    {
+        const std::string& filePath = GetAbsolutePath(meta.assetPath);
+
+        std::ofstream outFile(filePath, std::ios::binary);
+        if (outFile.is_open())
+        {
+            nlohmann::json json;
+            if (asset.animations.size() > 0)
+            {
+                for (size_t i = 0; i < asset.animations.size(); i++)
+                {
+                    auto& anim = asset.animations[i];
+                    json["animations"][i] = anim ? anim->id : InvalidAssetId;
+                }
+            }
+
+            if (asset.transitions.size() > 0)
+            {
+                for (size_t t = 0; t < asset.transitions.size(); t++)
+                {
+                    SaveTransition(json["transitions"][t], asset.transitions[t]);
+                }
+            }
+
+            if (asset.defaultAnimation >= 0 && asset.defaultAnimation < static_cast<int>(asset.animations.size()))
+            {
+                json["defaultAnimation"] = asset.animations[asset.defaultAnimation]->id;
+            }
+
+            outFile << json.dump(4);
+            outFile.flush();
+            outFile.close();
+            return;
+        }
+
+        LOG_ERROR("Failed to open animation file for writing: %s", filePath.c_str());
+    }
+
+    template<>
     std::shared_ptr<Level> AssetRegistry::LoadAsset(const AssetMeta& meta)
     {
         const std::string& name = GetAbsolutePath(meta.assetPath);
@@ -686,8 +1019,8 @@ namespace TombForge
             {
                 auto& instance = result->meshes.emplace_back();
                 instance.name = item["name"].get<std::string>();
-                instance.model = item["model"].get<AssetId>();
-                instance.mesh = item["mesh"].get<AssetId>();
+                instance.model = item["model"].get<uint32_t>();
+                instance.mesh = item["mesh"].get<uint32_t>();
                 const auto& transform = item["transform"];
                 instance.transform.position = glm::vec3{ transform[0], transform[1], transform[2] };
                 instance.transform.rotation = glm::quat{ transform[3], transform[4], transform[5], transform[6] };
@@ -717,16 +1050,62 @@ namespace TombForge
                 instance.modelMatrix = instance.transform.AsMatrix();
             }
 
-            for (const auto& item : json["pointLights"])
+            if (json.contains("collisionMeshes"))
             {
-                PointLight& light = result->pointLights.emplace_back();
-                const auto& position = item["position"];
-                light.position = glm::vec3{ position[0], position[1], position[2] };
-                const auto& color = item["color"];
-                light.color = glm::vec3{ color[0], color[1], color[2] };
-                light.innerRadius = item["innerRadius"].get<float>();
-                light.outerRadius = item["outerRadius"].get<float>();
-                light.intensity = item["intensity"].get<float>();
+                result->collisionMeshes.reserve(json["collisionMeshes"].size());
+                for (const auto& item : json["collisionMeshes"])
+                {
+                    const AssetId meshId = item.get<AssetId>();
+                    auto mesh = Load<CollisionMesh>(meshId);
+                    if (mesh)
+                    {
+                        result->collisionMeshes.emplace_back(mesh);
+                    }
+                }
+            }
+
+            if (json.contains("collisionMeshInstances"))
+            {
+                for (const auto& item : json["collisionMeshInstances"])
+                {
+                    auto& instance = result->meshColliders.emplace_back();
+                    const auto& transform = item["transform"];
+                    instance.transform.position = glm::vec3{ transform[0], transform[1], transform[2] };
+                    instance.transform.rotation = glm::quat{ transform[3], transform[4], transform[5], transform[6] };
+                    instance.transform.scale = glm::vec3{ transform[7], transform[8], transform[9] };
+                    instance.mesh = item["mesh"].get<uint32_t>();
+                }
+            }
+
+            if (json.contains("boxColliders"))
+            {
+                result->boxColliders.reserve(json["boxColliders"].size());
+                for (const auto& item : json["boxColliders"])
+                {
+                    auto& instance = result->boxColliders.emplace_back();
+                    const auto& transform = item["transform"];
+                    instance.transform.position = glm::vec3{ transform[0], transform[1], transform[2] };
+                    instance.transform.rotation = glm::quat{ transform[3], transform[4], transform[5], transform[6] };
+                    instance.transform.scale = glm::vec3{ transform[7], transform[8], transform[9] };
+                    const auto& halfExtents = item["halfExtents"];
+                    instance.halfExtents = glm::vec3{ halfExtents[0], halfExtents[1], halfExtents[2] };
+                }
+            }
+
+            if (json.contains("pointLights"))
+            {
+                result->pointLights.reserve(json["pointLights"].size());
+                for (const auto& item : json["pointLights"])
+                {
+                    PointLight& light = result->pointLights.emplace_back();
+                    const auto& position = item["position"];
+                    light.position = glm::vec3{ position[0], position[1], position[2] };
+                    const auto& color = item["color"];
+                    light.color = glm::vec3{ color[0], color[1], color[2] };
+                    light.innerRadius = item["innerRadius"].get<float>();
+                    light.outerRadius = item["outerRadius"].get<float>();
+                    light.intensity = item["intensity"].get<float>();
+                }
             }
 
             if (json.contains("directionalLight"))
@@ -810,6 +1189,38 @@ namespace TombForge
             json["meshes"][i]["lightCount"] = obj.lightCount;
         }
 
+        json["collisionMeshes"] = nlohmann::json::array();
+        for (size_t c = 0; c < asset.collisionMeshes.size(); c++)
+        {
+            json["collisionMeshes"][c] = asset.collisionMeshes[c]->id;
+        }
+
+        json["collisionMeshInstances"] = nlohmann::json::array();
+        for (size_t c = 0; c < asset.meshColliders.size(); c++)
+        {
+            auto& obj = asset.meshColliders[c];
+            const auto& transform = obj.transform;
+            json["collisionMeshInstances"][c]["transform"] = {
+                transform.position.x, transform.position.y, transform.position.z,
+                transform.rotation.w, transform.rotation.x, transform.rotation.y, transform.rotation.z,
+                transform.scale.x, transform.scale.y, transform.scale.z
+            };
+            json["collisionMeshInstances"][c]["mesh"] = obj.mesh;
+        }
+
+        json["boxColliders"] = nlohmann::json::array();
+        for (size_t b = 0; b < asset.boxColliders.size(); b++)
+        {
+            auto& obj = asset.boxColliders[b];
+            const auto& transform = obj.transform;
+            json["boxColliders"][b]["transform"] = {
+                transform.position.x, transform.position.y, transform.position.z,
+                transform.rotation.w, transform.rotation.x, transform.rotation.y, transform.rotation.z,
+                transform.scale.x, transform.scale.y, transform.scale.z
+            };
+            json["boxColliders"][b]["halfExtents"] = { obj.halfExtents.x, obj.halfExtents.y, obj.halfExtents.z };
+        }
+
         for (size_t i = 0; i < asset.pointLights.size(); i++)
         {
             auto& obj = asset.pointLights[i];
@@ -845,6 +1256,69 @@ namespace TombForge
         outFile.close();
     }
 
+    template<>
+    std::shared_ptr<CollisionMesh> AssetRegistry::LoadAsset(const AssetMeta& meta)
+    {
+        const std::string name = GetAbsolutePath(meta.assetPath);
+        std::ifstream inFile(name);
+        if (inFile.is_open())
+        {
+            BinaryReader reader(inFile);
+            std::shared_ptr<CollisionMesh> resource = std::make_shared<CollisionMesh>();
+            uint32_t numVertices = reader.ReadUInt32();
+            resource->vertices.reserve(numVertices);
+            for (uint32_t i = 0; i < numVertices; i++)
+            {
+                auto& v = resource->vertices.emplace_back();
+                v.x = reader.ReadFloat();
+                v.y = reader.ReadFloat();
+                v.z = reader.ReadFloat();
+            }
+            uint32_t numIndices = reader.ReadUInt32();
+            resource->indices.reserve(numIndices);
+            for (uint32_t i = 0; i < numIndices; i++)
+            {
+                resource->indices.emplace_back(reader.ReadUInt32());
+            }
+            inFile.close();
+            return resource;
+        }
+        else
+        {
+            LOG_ERROR("Failed to open collision mesh file: %s", name.c_str());
+            return nullptr;
+        }
+    }
+
+    template<>
+    void AssetRegistry::WriteAsset(const CollisionMesh& asset, const AssetMeta& meta) const
+    {
+        const std::string name = GetAbsolutePath(meta.assetPath);
+        std::ofstream outFile(name);
+        if (!outFile.is_open())
+        {
+            LOG_ERROR("Failed to open collision mesh file for writing: %s", name.c_str());
+            return;
+        }
+
+        BinaryWriter writer(outFile);
+        writer.WriteUInt32(static_cast<uint32_t>(asset.vertices.size()));
+        for (const auto& vertex : asset.vertices)
+        {
+            writer.WriteFloat(vertex.x);
+            writer.WriteFloat(vertex.y);
+            writer.WriteFloat(vertex.z);
+        }
+        writer.WriteUInt32(static_cast<uint32_t>(asset.indices.size()));
+        for (const auto& index : asset.indices)
+        {
+            writer.WriteUInt32(index);
+        }
+
+        outFile.flush();
+        outFile.close();
+    }
+
     template<typename T>
     bool AssetRegistry::SaveAssetIfDirty(const AssetId id, AssetMeta& meta)
     {
@@ -864,13 +1338,14 @@ namespace TombForge
                     return false;
                 }
 
-                const bool renamed = meta.assetPath != name;
-                meta.assetPath = name;
+                const bool renamed = meta.name != name;
+                meta.name = name;
+                meta.assetPath = FileIO::GetBasePath(meta.assetPath) + FileIO::Separator + name + GetExtension(meta.type);
 
                 WriteAsset<T>(*it->second, meta);
                 it->second->isDirty = false;
 
-                if (renamed && FileIO::FileExists(GetAbsolutePath(name)))
+                if (renamed && FileIO::FileExists(GetAbsolutePath(meta.assetPath)))
                 {
                     if (FileIO::FileExists(oldPath))
                     {
@@ -881,5 +1356,6 @@ namespace TombForge
 
             return true;
         }
+        return false;
     }
 }

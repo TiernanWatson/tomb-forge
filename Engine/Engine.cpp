@@ -80,16 +80,16 @@ namespace TombForge
 
         void GenerateDebugTexture(Texture& texture, glm::ivec4 background, glm::ivec4 line)
         {
-            constexpr int LineThickness = 10;
+            constexpr uint32_t LineThickness = 10;
 
             texture.width = texture.height = 1024;
             texture.format = TextureFormat::RGBA;
 
             texture.data.resize(texture.width * texture.height * 4);
 
-            for (int w = 0; w < texture.width; w++)
+            for (uint32_t w = 0; w < texture.width; w++)
             {
-                for (int h = 0; h < texture.height; h++)
+                for (uint32_t h = 0; h < texture.height; h++)
                 {
                     const size_t baseIndex = (w * texture.width * 4) + h * 4;
 
@@ -207,36 +207,11 @@ namespace TombForge
             characterSettings->mSupportingVolume = JPH::Plane{ JPH::Vec3::sAxisY(), -LaraRadius };
 
             ctx.lara.physics = new JPH::CharacterVirtual(characterSettings, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), 0, ctx.physics.system);
-
-            ctx.lara.states.reserve(LARA_STATE_COUNT);
-            for (size_t i = 0; i < LARA_STATE_COUNT; i++)
-            {
-                LaraBaseState* state{};
-                switch (i)
-                {
-                case LARA_STATE_LOCOMOTION:
-                    state = new LocomotionState();
-                    break;
-                case LARA_STATE_AIR:
-                    state = new AirState();
-                    break;
-                case LARA_STATE_CLIMB:
-                    state = new ClimbState();
-                    break;
-                default:
-                    LOG_ERROR("Could not set up state %i", i);
-                    break;
-                }
-                ctx.lara.states.emplace(ctx.lara.states.begin() + i, state);
-            }
-
-            ctx.lara.LoadAnimations(ctx.assetRegistry);
-            ctx.lara.SetAnimation(LARA_ANIM_IDLE, 0.0f, true);
         }
 
         void InitializeColliders(EngineContext& ctx)
         {
-            /*for (auto& box : m_level->boxColliders)
+            for (auto& box : ctx.level->boxColliders)
             {
                 if (box.halfExtents.x <= 0.0f || box.halfExtents.y <= 0.0f || box.halfExtents.z <= 0.0f)
                 {
@@ -261,13 +236,14 @@ namespace TombForge
 
                 JPH::Ref<JPH::Shape> shape = new JPH::BoxShape(GlmVec3ToJph(box.halfExtents));
                 JPH::Ref<JPH::Shape> shapeMoved = new JPH::RotatedTranslatedShape(GlmVec3ToJph(box.transform.position), GlmQuatToJph(box.transform.rotation), shape);
-                auto& bodies = m_physicsSystem->GetBodyInterface();
-                box.rigidbody = CreateBody(bodies, shapeMoved, JPH::EMotionType::Static);
-            }*/
+                auto& bodies = ctx.physics.system->GetBodyInterface();
+                box.rigidbody = CreateBody(bodies, shapeMoved, JPH::EMotionType::Static, 0);
+            }
 
             for (uint64_t m = 0; m < ctx.level->meshColliders.size(); m++)
             {
-                auto& mesh = ctx.level->meshColliders[m];
+                auto& instance = ctx.level->meshColliders[m];
+                auto& mesh = *ctx.level->collisionMeshes[instance.mesh];
 
                 JPH::IndexedTriangleList triList{};
                 for (size_t i = 0; i < mesh.indices.size(); i += 3)
@@ -301,7 +277,7 @@ namespace TombForge
                 {
                     JPH::Ref<JPH::Shape> meshShape = settings.Create().Get();
                     auto& bodies = ctx.physics.system->GetBodyInterface();
-                    mesh.rigidbody = CreateBody(bodies, meshShape, JPH::EMotionType::Static, m);
+                    instance.rigidbody = CreateBody(bodies, meshShape, JPH::EMotionType::Static, m);
                 }
                 else
                 {
@@ -370,7 +346,7 @@ namespace TombForge
 
         if (!glfwInit())
         {
-            throw std::runtime_error("Failed to initialize GLFW");
+            return false;
         }
 
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -380,13 +356,14 @@ namespace TombForge
 
         ctx.windowWidth = config.resolutionX;
         ctx.windowHeight = config.resolutionY;
-
         if (ctx.window = glfwCreateWindow(ctx.windowWidth, ctx.windowHeight, config.windowTitle.c_str(), nullptr, nullptr); !ctx.window)
         {
             glfwTerminate();
-            throw std::runtime_error("Failed to initialize the window");
+            return false;
         }
 
+        glfwMaximizeWindow(ctx.window);
+        glfwGetWindowSize(ctx.window, &ctx.windowWidth, &ctx.windowHeight);
         glfwMakeContextCurrent(ctx.window);
         glfwSwapInterval(0);
 
@@ -411,16 +388,18 @@ namespace TombForge
         {
             glfwDestroyWindow(ctx.window);
             glfwTerminate();
-            throw std::runtime_error("Failed to initialize GLAD");
+            return false;
         }
 
         InitPhysics(ctx.physics);
 
-        ctx.renderer.Initialize();
+        ctx.renderer.Initialize(ctx.windowWidth, ctx.windowHeight);
         ctx.camera.aspect = static_cast<float>(ctx.windowWidth) / ctx.windowHeight;
         SetupDefaultShapes(ctx);
 
         ctx.previousTime = glfwGetTime();
+
+        return true;
     }
 
     bool UpdateEngine(EngineContext& ctx)
@@ -443,56 +422,9 @@ namespace TombForge
             {
                 ctx.totalTime += ctx.deltaTime;
                 ctx.wantsFrameAdvance = false;
-
-                if (ctx.lara.model)
-                {
-                    ctx.lara.cameraPitch = ctx.cameraPitch;
-                    ctx.lara.cameraYaw = ctx.cameraYaw;
-
-                    auto* state = ctx.lara.states[ctx.lara.stateIndex].get();
-                    if (ctx.lara.stateIndex != LARA_STATE_COUNT)
-                    {
-                        if (LaraState nextState = state->ShouldTransition(ctx.laraController); nextState != LARA_STATE_COUNT)
-                        {
-                            if (nextState < ctx.lara.states.size() && ctx.lara.states[nextState])
-                            {
-                                state->Exit(ctx.laraController);
-                                state = ctx.lara.states[nextState].get();
-                                state->Begin(ctx.laraController);
-
-                                ctx.lara.stateIndex = nextState;
-                            }
-                        }
-
-                        state->PreAnimationUpdate(ctx.laraController, ctx.deltaTime);
-                        state->UpdateAnimation(ctx.laraController, ctx.deltaTime);
-                        ctx.lara.animPlayer.Process(ctx.deltaTime);
-                        state->PostAnimationUpdate(ctx.laraController, ctx.deltaTime);
-                    }
-                }
-
-                auto& character = ctx.lara.physics;
-                if (character)
-                {
-                    auto& state = ctx.lara.states[ctx.lara.stateIndex];
-                    state->PrePhysicsUpdate(ctx.laraController, ctx.deltaTime, ctx.physicsInterface);
-
-                    const JPH::Vec3 velocity = character->GetGroundVelocity() + GlmVec3ToJph(ctx.lara.actualVelocity);
-                    character->SetPosition(GlmVec3ToJph(ctx.lara.transform.position));
-                    character->SetLinearVelocity(velocity);
-                    character->ExtendedUpdate(ctx.deltaTime,
-                        { 0.0f, -9.8f, 0.0f },
-                        {},
-                        ctx.physics.playerBpFilter,
-                        ctx.physics.playerLayerFilter,
-                        { },
-                        { },
-                        *ctx.physics.tmpAllocator);
-
-                    ctx.lara.transform.position = JphVec3ToGlm(character->GetPosition());
-                    state->PostPhysicsUpdate(ctx.laraController, ctx.deltaTime, ctx.physicsInterface);
-                }
-
+                ctx.lara.cameraPitch = ctx.cameraPitch;
+                ctx.lara.cameraYaw = ctx.cameraYaw;
+                ctx.laraController.Update(ctx.deltaTime, ctx.physics);
                 ctx.physics.system->Update(ctx.deltaTime, 1, ctx.physics.tmpAllocator, ctx.physics.jobSystem);
             }
 
@@ -638,5 +570,17 @@ namespace TombForge
     {
         ctx.level->meshColliders = std::move(colliders);
         InitializeColliders(ctx);
+    }
+
+    void SetMouseVisible(GLFWwindow* window, bool visible)
+    {
+        if (visible)
+        {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+        }
+        else
+        {
+            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
     }
 }

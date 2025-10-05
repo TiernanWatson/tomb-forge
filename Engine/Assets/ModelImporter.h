@@ -41,6 +41,15 @@ namespace TombForge
         std::shared_ptr<Model> model{};
         std::shared_ptr<Skeleton> skeleton{};
         std::shared_ptr<Animation> animation{};
+
+        std::string modelSourcePath{};
+        std::string skeletonSourcePath{};
+        std::string animationSourcePath{};
+
+        std::vector<std::string> materialSourcePaths{};
+        std::vector<std::string> albedoSourcePaths{};
+        std::vector<std::string> normalSourcePaths{};
+        std::vector<std::string> metalnessSourcePaths{};
     };
 
     class AssetImportSession

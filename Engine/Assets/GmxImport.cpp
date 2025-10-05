@@ -88,8 +88,6 @@ namespace TombForge
                 newLight.outerRadius = light.Decay_Far_End * settings.scale;
             }
 
-            //result.geometry = std::make_shared<Model>();
-
             std::vector<Transform> transforms{};
             transforms.reserve(outZone.Transform.size());
 
@@ -291,6 +289,7 @@ namespace TombForge
                         result.geometry.emplace_back(std::make_shared<Model>());
                     }
                     outModel = result.geometry[0];
+                    outModel->name = FileIO::GetFileName(filePath, false);
                 }
 
                 auto& meshIn = outModel->meshes.emplace_back();
@@ -394,11 +393,9 @@ namespace TombForge
                     trans.position.x = outCln.Transform[t].tX;
                     trans.position.y = outCln.Transform[t].tY;
                     trans.position.z = outCln.Transform[t].tZ;
-
                     trans.scale.x = outCln.Transform[t].sX;
                     trans.scale.y = outCln.Transform[t].sY;
                     trans.scale.z = outCln.Transform[t].sZ;
-
                     trans.rotation = glm::quat({ glm::radians(outCln.Transform[t].rX), glm::radians(outCln.Transform[t].rY), glm::radians(outCln.Transform[t].rZ) });
 
                     if (outCln.Transform[t].parent.size() > 0)
@@ -431,8 +428,6 @@ namespace TombForge
                     bool foundTransform{};
                     if (outCln.Mesh[c].parent.size() > 0)
                     {
-                        
-                        
                         for (tI = 0; tI < outCln.Transform.size(); tI++)
                         {
                             if (outCln.Transform[tI].name == outCln.Mesh[c].parent)
@@ -448,7 +443,6 @@ namespace TombForge
                     }
 
                     const bool isBox = outCln.Mesh[c].name.find("box") != std::string::npos;
-
                     if (isBox)
                     {
                         float largestX{};
@@ -473,26 +467,20 @@ namespace TombForge
                             }
                         }
 
-                        glm::vec3 extents{ largestX, largestZ, largestY };
-                        extents *= settings.scale / 2.0f;
-
-                        Transform position = adjustment * (foundTransform ? transforms[tI] : Transform{});
-
-                        BoxCollider& box = result.boxColliders.emplace_back();
-                        box.halfExtents = extents;
-                        box.transform = position;
+                        auto& box = result.boxColliders.emplace_back();
+                        box.halfExtents.x = largestX * settings.scale / 2.0f;
+                        box.halfExtents.y = largestZ * settings.scale / 2.0f;
+                        box.halfExtents.z = largestY * settings.scale / 2.0f;
+                        box.transform = adjustment * (foundTransform ? transforms[tI] : Transform{});
                     }
                     else if (outCln.Mesh[c].name.find("CLN_TRIANGLES") != std::string::npos)
                     {
-                        MeshCollider& mesh = result.meshColliders.emplace_back();
+                        auto& mesh = *result.meshColliders.emplace_back(std::make_shared<CollisionMesh>());
+                        mesh.name = outCln.Mesh[c].name;
                         for (size_t c2 = 0; c2 < outCln.Mesh[c].X.size(); c2++)
                         {
-                            
                             glm::vec4 colPos(outCln.Mesh[c].X[c2], outCln.Mesh[c].Y[c2], outCln.Mesh[c].Z[c2], 1.0f);
-                            //glm::vec3 colPos(outCln.Mesh[c].X[c2], outCln.Mesh[c].Y[c2], outCln.Mesh[c].Z[c2]);
-                            //colPos *= settings.scale;
                             mesh.vertices.emplace_back(adjustment.AsMatrix() * colPos);
-                            //mesh.vertices.emplace_back(adjustment.AsMatrix() * trans * colPos);
                         }
 
                         for (auto& face : outCln.Mesh[c].Face)
@@ -505,7 +493,6 @@ namespace TombForge
                                 mesh.indices.emplace_back(face.v3);
                                 mesh.indices.emplace_back(face.v4);
                                 mesh.indices.emplace_back(face.v1);
-                                LOG_WARNING("Importing quads");
                             }
                             else
                             {
@@ -519,14 +506,12 @@ namespace TombForge
             }
 
             LOG("Imported %s", filePath.c_str());
-
             return result;
         }
         else
         {
             LOG_ERROR("Error importing %s", filePath.c_str());
+            return {};
         }
-
-        return {};
     }
 }

@@ -19,9 +19,9 @@ namespace TombForge
     {
     }
 
-    void Renderer::Initialize()
+    void Renderer::Initialize(int width, int height)
     {
-        m_graphics.Initialize();
+        m_graphics.Initialize(width, height);
         InitializeShaders();
         InitializeDefaultTextures();
     }

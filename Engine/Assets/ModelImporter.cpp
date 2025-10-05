@@ -534,7 +534,7 @@ namespace TombForge
                 for (unsigned int p = 0; p < node->mNumPositionKeys; p++)
                 {
                     PositionKey& key = keys.positions.emplace_back();
-                    key.time = node->mPositionKeys[p].mTime;
+                    key.time = static_cast<float>(node->mPositionKeys[p].mTime);
                     key.value.x = node->mPositionKeys[p].mValue.x * settings.scale;
                     key.value.y = node->mPositionKeys[p].mValue.y * settings.scale;
                     key.value.z = node->mPositionKeys[p].mValue.z * settings.scale;
@@ -544,7 +544,7 @@ namespace TombForge
                 {
                     // Don't scale this by the setting because we already scale the position
                     ScaleKey& key = keys.scales.emplace_back();
-                    key.time = node->mScalingKeys[s].mTime;
+                    key.time = static_cast<float>(node->mScalingKeys[s].mTime);
                     key.value.x = node->mScalingKeys[s].mValue.x;
                     key.value.y = node->mScalingKeys[s].mValue.y;
                     key.value.z = node->mScalingKeys[s].mValue.z;
@@ -553,7 +553,7 @@ namespace TombForge
                 for (unsigned int r = 0; r < node->mNumRotationKeys; r++)
                 {
                     RotationKey& key = keys.rotations.emplace_back();
-                    key.time = node->mRotationKeys[r].mTime;
+                    key.time = static_cast<float>(node->mRotationKeys[r].mTime);
                     key.value.x = node->mRotationKeys[r].mValue.x;
                     key.value.y = node->mRotationKeys[r].mValue.y;
                     key.value.z = node->mRotationKeys[r].mValue.z;

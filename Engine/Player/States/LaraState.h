@@ -11,10 +11,8 @@ namespace TombForge
 {
     class PhysicsInterface;
 
-    /// <summary>
     /// Allows encapsulation of state-specific variables and easier to read code.
-    /// Flow: PreAnimationUpdate -> UpdateAnimation -> PrePhysicsUpdate -> PostPhysicsUpdate.
-    /// </summary>
+    /// Flow: PreAnimationUpdate -> PostAnimationUpdate -> PrePhysicsUpdate -> PostPhysicsUpdate.
     class LaraBaseState
     {
     public:
@@ -28,9 +26,6 @@ namespace TombForge
 
         // Process input and do anything that might affect the root motion output (general update)
         virtual void PreAnimationUpdate(LaraController& lara, float deltaTime) {};
-
-        // Change animations if necessary
-        virtual void UpdateAnimation(LaraController& lara, float deltaTime) {};
 
         // Combine root motion info and input to get final movement
         virtual void PostAnimationUpdate(LaraController& lara, float deltaTime) {};

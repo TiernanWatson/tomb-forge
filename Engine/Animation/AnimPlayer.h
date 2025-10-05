@@ -27,8 +27,8 @@ namespace TombForge
     class AnimPlayer
     {
     public:
-        void Play(std::shared_ptr<const Animation> animPlayer, bool loop = false, float targetFrame = 0.0f);
-        void BlendTo(std::shared_ptr<const Animation> animPlayer, float frames, bool loop = false, float targetFrame = 0.0f);
+        void Play(std::shared_ptr<const Animation> animation, bool loop = false, float targetFrame = 0.0f);
+        void BlendTo(std::shared_ptr<const Animation> animation, float frames, bool loop = false, float targetFrame = 0.0f);
         void Process(float deltaTime);
 
         void SetSkeleton(std::shared_ptr<const Skeleton> skeleton);

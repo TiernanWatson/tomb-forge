@@ -12,23 +12,7 @@ namespace TombForge
     enum AnimEvent : uint8_t
     {
         ANIM_EVENT_GENERIC,
-
-        ANIM_EVENT_LEFT_FOOT,
-        ANIM_EVENT_RIGHT_FOOT,
-        ANIM_EVENT_LEFT_HAND,
-        ANIM_EVENT_RIGHT_HAND,
-
-        ANIM_EVENT_GROUND_CONTACT,
-        ANIM_EVENT_LEFT_GROUND,
-
-        ANIM_EVENT_STATE_TRANSITION,
-
-        ANIM_EVENT_ROOT_MOVE_OFF,
-        ANIM_EVENT_ROOT_MOVE_ON,
-
-        ANIM_EVENT_COLLISION_ON,
-        ANIM_EVENT_COLLISION_OFF,
-
+        ANIM_EVENT_FOOT_SFX,
         ANIM_EVENT_COUNT
     };
 
@@ -56,13 +40,9 @@ namespace TombForge
         static constexpr float DefaultFrameRate{ 30.0f };
 
         std::vector<BoneKeys> keys{}; // The index corresponds to the bone ID
-
         std::vector<EventKey> events{};
-
         float length{}; // Total length of animation in frames
-
         float framerate{ DefaultFrameRate };
-
         bool hasRootMotion{}; // Extract root movement and don't apply to skeleton
     };
 
