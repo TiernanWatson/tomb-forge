@@ -40,6 +40,15 @@ namespace TombForge
         }
 
         template<typename T>
+        void WriteArray(const T* array, size_t count)
+        {
+            for (size_t i = 0; i < count; i++)
+            {
+                WriteLE(array[i]);
+            }
+        }
+
+        template<typename T>
         void WriteVector(const std::vector<T>& vec)
         {
             ASSERT(vec.size() <= std::numeric_limits<uint32_t>::max(), "Trying to write array that is larger than max size");

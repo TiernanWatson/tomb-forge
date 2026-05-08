@@ -13,7 +13,19 @@ namespace TombForge
     {
         ANIM_EVENT_GENERIC,
         ANIM_EVENT_FOOT_SFX,
+        ANIM_EVENT_JUMP_SFX,
+        ANIM_EVENT_SWOOSH_SFX,
+        ANIM_EVENT_CLIMBUP_SFX,
+        ANIM_EVENT_HAND_SFX,
         ANIM_EVENT_COUNT
+    };
+
+    enum class BlendCurve : uint8_t
+    {
+        Linear,
+        EaseIn,
+        EaseOut,
+        Count
     };
 
     template<typename KeyType>

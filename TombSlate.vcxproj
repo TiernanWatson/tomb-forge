@@ -146,12 +146,15 @@
     <ClCompile Include="Core\Graphics\AABB.cpp" />
     <ClCompile Include="Core\Graphics\Frustum.cpp" />
     <ClCompile Include="Core\Graphics\Triangle.cpp" />
+    <ClCompile Include="Engine\Animation\SkeletonRetargetMap.cpp" />
     <ClCompile Include="Engine\Audio\Audio.cpp" />
     <ClCompile Include="Engine\Audio\AudioSystem.cpp" />
     <ClCompile Include="Engine\Editor.cpp" />
     <ClCompile Include="Engine\Engine.cpp" />
     <ClCompile Include="Engine\Physics\Physics.cpp" />
     <ClCompile Include="Engine\Rendering\Material.cpp" />
+    <ClCompile Include="Engine\Rendering\MaterialInstance.cpp" />
+    <ClCompile Include="Engine\Rendering\MaterialTemplate.cpp" />
     <ClCompile Include="Engine\Rendering\Model.cpp" />
     <ClCompile Include="Engine\Rendering\Graphics.cpp" />
     <ClCompile Include="Core\Graphics\Plane.cpp" />
@@ -176,6 +179,7 @@
     <ClCompile Include="Engine\Rendering\JoltDebugRenderer.cpp" />
     <ClCompile Include="Engine\Rendering\Renderer.cpp" />
     <ClCompile Include="Engine\Rendering\ShaderCache.cpp" />
+    <ClCompile Include="Engine\Rendering\ShaderInstance.cpp" />
     <ClCompile Include="glad.c" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="stbi_impl.cpp" />
@@ -199,6 +203,7 @@
     <ClInclude Include="Core\IO\BinaryReader.h" />
     <ClInclude Include="Core\IO\BinaryWriter.h" />
     <ClInclude Include="Engine\Animation\AnimationSet.h" />
+    <ClInclude Include="Engine\Animation\SkeletonRetargetMap.h" />
     <ClInclude Include="Engine\Audio\Audio.h" />
     <ClInclude Include="Engine\Audio\AudioSystem.h" />
     <ClInclude Include="Engine\Audio\Sound.h" />
@@ -210,10 +215,12 @@
     <ClInclude Include="Engine\Physics\PhysicsLayers.h" />
     <ClInclude Include="Engine\Player\LaraConfig.h" />
     <ClInclude Include="Engine\Rendering\Material.h" />
+    <ClInclude Include="Engine\Rendering\MaterialInstance.h" />
+    <ClInclude Include="Engine\Rendering\MaterialTemplate.h" />
     <ClInclude Include="Engine\Rendering\Model.h" />
     <ClInclude Include="Engine\Rendering\Graphics.h" />
     <ClInclude Include="Core\Graphics\Plane.h" />
-    <ClInclude Include="Engine\Rendering\Shader.h" />
+    <ClInclude Include="Engine\Rendering\ShaderInstance.h" />
     <ClInclude Include="Engine\ProjectSettings.h" />
     <ClInclude Include="Engine\Assets\AssetId.h" />
     <ClInclude Include="Engine\Assets\AssetRegistry.h" />

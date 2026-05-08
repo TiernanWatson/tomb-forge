@@ -153,6 +153,18 @@
     <ClCompile Include="Engine\Rendering\ShaderCache.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Engine\Animation\SkeletonRetargetMap.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Rendering\ShaderInstance.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Rendering\MaterialTemplate.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Rendering\MaterialInstance.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Levels\Level.h">
@@ -275,7 +287,7 @@
     <ClInclude Include="Core\Graphics\Frustum.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Rendering\Shader.h">
+    <ClInclude Include="Engine\Rendering\ShaderInstance.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Player\States\ClimbState.h">
@@ -342,6 +354,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Levels\CollisionMesh.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Animation\SkeletonRetargetMap.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Rendering\MaterialTemplate.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Rendering\MaterialInstance.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

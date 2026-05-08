@@ -47,4 +47,14 @@ namespace TombForge
             return data.size() == static_cast<size_t>(format) * width * height;
         }
     };
+
+    inline bool TextureValidOnGPU(const Texture* texture)
+    {
+        return texture && texture->gpuHandle.IsValid();
+    }
+
+    inline bool ValidTextureNotOnGPU(const Texture* texture)
+    {
+        return texture && !texture->gpuHandle.IsValid() && texture->IsValidData();
+    }
 }

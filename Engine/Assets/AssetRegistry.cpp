@@ -41,6 +41,8 @@ namespace TombForge
             json["minFramesElapsed"] = transition.minFramesElapsed;
             json["shouldBlend"] = transition.shouldBlend;
             json["loop"] = transition.loop;
+            json["snapRoot"] = transition.snapRoot;
+            json["blendCurve"] = transition.blendCurve;
             json["conditions"] = nlohmann::json::array();
             for (const auto& condition : transition.conditions)
             {
@@ -79,6 +81,14 @@ namespace TombForge
             if (json.contains("loop"))
             {
                 transition.loop = json["loop"].get<bool>();
+            }
+            if (json.contains("snapRoot"))
+            {
+                transition.snapRoot = json["snapRoot"].get<bool>();
+            }
+            if (json.contains("blendCurve"))
+            {
+                transition.blendCurve = json["blendCurve"].get<BlendCurve>();
             }
             if (json.contains("conditions"))
             {
@@ -276,6 +286,26 @@ namespace TombForge
             {
                 config.modelId = json["modelId"].get<AssetId>();
             }
+            if (json.contains("feetSfx"))
+            {
+                config.feetSfx = json["feetSfx"].get<std::vector<AssetId>>();
+            }
+            if (json.contains("jumpSfx"))
+            {
+                config.jumpSfx = json["jumpSfx"].get<std::vector<AssetId>>();
+            }
+            if (json.contains("climbupSfx"))
+            {
+                config.climbupSfx = json["climbupSfx"].get<std::vector<AssetId>>();
+            }
+            if (json.contains("swooshSfx"))
+            {
+                config.swooshSfx = json["swooshSfx"].get<std::vector<AssetId>>();
+            }
+            if (json.contains("handSfx"))
+            {
+                config.handSfx = json["handSfx"].get<std::vector<AssetId>>();
+            }
             if (json.contains("animationSets"))
             {
                 config.animSetsForStates.clear();
@@ -314,6 +344,11 @@ namespace TombForge
         {
             nlohmann::json json{};
             json["modelId"] = config.modelId;
+            json["feetSfx"] = config.feetSfx;
+            json["jumpSfx"] = config.jumpSfx;
+            json["climbupSfx"] = config.climbupSfx;
+            json["swooshSfx"] = config.swooshSfx;
+            json["handSfx"] = config.handSfx;
             json["animationSets"] = nlohmann::json::array();
             for (const auto& [state, setId] : config.animSetsForStates)
             {
@@ -331,6 +366,16 @@ namespace TombForge
                 SaveTransition(item, entry.transition);
                 json["transitionMaps"].emplace_back(item);
             }
+            json["ledgeReachOffset"] = { config.ledgeReachOffset.x, config.ledgeReachOffset.y, config.ledgeReachOffset.z };
+            json["ledgeGrabOffset"] = { config.ledgeGrabOffset.x, config.ledgeGrabOffset.y, config.ledgeGrabOffset.z };
+            json["ledgeHangOffset"] = { config.ledgeHangOffset.x, config.ledgeHangOffset.y, config.ledgeHangOffset.z };
+            json["walkSpeed"] = config.walkSpeed;
+            json["runSpeed"] = config.runSpeed;
+            json["jumpHeight"] = config.jumpHeight;
+            json["jumpDistance"] = config.jumpDistance;
+            json["safeFallDistance"] = config.safeFallDistance;
+            json["deathFallDistance"] = config.deathFallDistance;
+            json["gravity"] = config.gravity;
             outFile << json.dump(4);
             outFile.flush();
             outFile.close();
@@ -601,6 +646,26 @@ namespace TombForge
             }
         }
 
+        if (json.contains("roughnessValue"))
+        {
+            resource->roughnessValue = json["roughnessValue"].get<float>();
+        }
+
+        if (json.contains("metalnessValue"))
+        {
+            resource->metalnessValue = json["metalnessValue"].get<float>();
+        }
+
+        if (json.contains("roughnessChannel"))
+        {
+            resource->roughnessChannel = static_cast<TextureChannel>(json["roughnessChannel"].get<uint8_t>());
+        }
+
+        if (json.contains("metalnessChannel"))
+        {
+            resource->metalnessChannel = static_cast<TextureChannel>(json["metalnessChannel"].get<uint8_t>());
+        }
+
         return resource;
     }
 
@@ -632,6 +697,10 @@ namespace TombForge
             }
             json["albedoColor"] = { asset.albedoColor.r, asset.albedoColor.g, asset.albedoColor.b, asset.albedoColor.a };
             json["isTransparent"] = asset.TestFlag(MATERIAL_FLAG_TRANSPARENT);
+            json["roughnessValue"] = asset.roughnessValue;
+            json["metalnessValue"] = asset.metalnessValue;
+            json["roughnessChannel"] = static_cast<uint8_t>(asset.roughnessChannel);
+            json["metalnessChannel"] = static_cast<uint8_t>(asset.metalnessChannel);
 
             outFile << json.dump(4);
 
@@ -911,6 +980,31 @@ namespace TombForge
                 }
             }
 
+            if (json.contains("boneWarps") && json["boneWarps"].is_array())
+            {
+                for (const auto& item : json["boneWarps"])
+                {
+                    BoneWarp& warp = resource->boneWarps.emplace_back();
+                    warp.animationIndex = item["animationIndex"].get<uint8_t>();
+                    warp.boneId = item["boneId"].get<uint8_t>();
+                    const auto& pos = item["offset"];
+                    warp.offset = glm::vec3{ pos[0], pos[1], pos[2] };
+                    warp.startFrame = item["startFrame"].get<float>();
+                    warp.endFrame = item["endFrame"].get<float>();
+                    warp.reverse = item["reverse"].get<bool>();
+                }
+            }
+
+            if (json.contains("animTags") && json["animTags"].is_array())
+            {
+                // Mapped by same index as animations
+                resource->animTags.reserve(resource->animations.size());
+                for (const auto& item : json["animTags"])
+                {
+                    resource->animTags.emplace_back(item.get<std::string>());
+                }
+            }
+
             if (json.contains("defaultAnimation"))
             {
                 const AssetId defaultAnimId = json["defaultAnimation"].get<AssetId>();
@@ -978,10 +1072,37 @@ namespace TombForge
                 }
             }
 
+            if (asset.boneWarps.size() > 0)
+            {
+                for (size_t w = 0; w < asset.boneWarps.size(); w++)
+                {
+                    const BoneWarp& warp = asset.boneWarps[w];
+                    json["boneWarps"][w]["animationIndex"] = warp.animationIndex;
+                    json["boneWarps"][w]["boneId"] = warp.boneId;
+                    json["boneWarps"][w]["offset"] = { warp.offset.x, warp.offset.y, warp.offset.z };
+                    json["boneWarps"][w]["startFrame"] = warp.startFrame;
+                    json["boneWarps"][w]["endFrame"] = warp.endFrame;
+                    json["boneWarps"][w]["reverse"] = warp.reverse;
+                }
+            }
+
+            if (asset.animTags.size() > 0)
+            {
+                for (size_t i = 0; i < asset.animTags.size(); i++)
+                {
+                    json["animTags"][i] = asset.animTags[i];
+                }
+            }
+
             if (asset.defaultAnimation >= 0 && asset.defaultAnimation < static_cast<int>(asset.animations.size()))
             {
                 json["defaultAnimation"] = asset.animations[asset.defaultAnimation]->id;
             }
+
+            json["defaultBlendTime"] = asset.defaultBlendTime;
+            json["defaultTargetFrame"] = asset.defaultTargetFrame;
+            json["defaultShouldLoop"] = asset.defaultShouldLoop;
+            json["defaultShouldBlend"] = asset.defaultShouldBlend;
 
             outFile << json.dump(4);
             outFile.flush();
@@ -1092,6 +1213,18 @@ namespace TombForge
                 }
             }
 
+            if (json.contains("ledges"))
+            {
+                result->ledges.reserve(json["ledges"].size());
+                for (const auto& item : json["ledges"])
+                {
+                    auto& ledge = result->ledges.emplace_back();
+                    const auto& start = item["point"];
+                    ledge.point = glm::vec3{ start[0], start[1], start[2] };
+                    ledge.nextLedge = item["next"].get<uint32_t>();
+                }
+            }
+
             if (json.contains("pointLights"))
             {
                 result->pointLights.reserve(json["pointLights"].size());
@@ -1122,6 +1255,11 @@ namespace TombForge
                 result->ambientColor = glm::vec3{ color[0], color[1], color[2] };
             }
 
+            if (json.contains("ambientStrength"))
+            {
+                result->ambientStrength = json["ambientStrength"].get<float>();
+            }
+
             if (json.contains("ambientSound"))
             {
                 const AssetId soundId = json["ambientSound"].get<AssetId>();
@@ -1129,6 +1267,18 @@ namespace TombForge
                 {
                     result->ambientSound = Load<Sound>(soundId);
                 }
+            }
+
+            if (json.contains("ambientSoundVolume"))
+            {
+                result->ambientSoundVolume = json["ambientSoundVolume"].get<float>();
+            }
+
+            if (json.contains("startPosition"))
+            {
+                result->startPosition.x = json["startPosition"][0];
+                result->startPosition.y = json["startPosition"][1];
+                result->startPosition.z = json["startPosition"][2];
             }
 
             return result;
@@ -1221,6 +1371,14 @@ namespace TombForge
             json["boxColliders"][b]["halfExtents"] = { obj.halfExtents.x, obj.halfExtents.y, obj.halfExtents.z };
         }
 
+        json["ledges"] = nlohmann::json::array();
+        for (size_t l = 0; l < asset.ledges.size(); l++)
+        {
+            auto& obj = asset.ledges[l];
+            json["ledges"][l]["point"] = { obj.point.x, obj.point.y, obj.point.z };
+            json["ledges"][l]["next"] = obj.nextLedge;
+        }
+
         for (size_t i = 0; i < asset.pointLights.size(); i++)
         {
             auto& obj = asset.pointLights[i];
@@ -1249,7 +1407,13 @@ namespace TombForge
             asset.ambientColor.b
         };
 
+        json["ambientStrength"] = asset.ambientStrength;
+
         json["ambientSound"] = asset.ambientSound ? asset.ambientSound->id : InvalidAssetId;
+
+        json["ambientSoundVolume"] = asset.ambientSoundVolume;
+
+        json["startPosition"] = { asset.startPosition.x, asset.startPosition.y, asset.startPosition.z };
 
         outFile << json.dump(4);
         outFile.flush();
@@ -1260,26 +1424,20 @@ namespace TombForge
     std::shared_ptr<CollisionMesh> AssetRegistry::LoadAsset(const AssetMeta& meta)
     {
         const std::string name = GetAbsolutePath(meta.assetPath);
-        std::ifstream inFile(name);
+        std::ifstream inFile(name, std::ios::binary);
         if (inFile.is_open())
         {
-            BinaryReader reader(inFile);
             std::shared_ptr<CollisionMesh> resource = std::make_shared<CollisionMesh>();
-            uint32_t numVertices = reader.ReadUInt32();
-            resource->vertices.reserve(numVertices);
-            for (uint32_t i = 0; i < numVertices; i++)
-            {
-                auto& v = resource->vertices.emplace_back();
-                v.x = reader.ReadFloat();
-                v.y = reader.ReadFloat();
-                v.z = reader.ReadFloat();
-            }
-            uint32_t numIndices = reader.ReadUInt32();
-            resource->indices.reserve(numIndices);
-            for (uint32_t i = 0; i < numIndices; i++)
-            {
-                resource->indices.emplace_back(reader.ReadUInt32());
-            }
+
+            BinaryReader reader(inFile);
+            const uint64_t numVertices = reader.ReadUInt64();
+            resource->vertices.resize(numVertices);
+            reader.ReadArray(resource->vertices.data(), numVertices);
+
+            const uint64_t numIndices = reader.ReadUInt64();
+            resource->indices.resize(numIndices);
+            reader.ReadArray(resource->indices.data(), numIndices);
+
             inFile.close();
             return resource;
         }
@@ -1294,7 +1452,7 @@ namespace TombForge
     void AssetRegistry::WriteAsset(const CollisionMesh& asset, const AssetMeta& meta) const
     {
         const std::string name = GetAbsolutePath(meta.assetPath);
-        std::ofstream outFile(name);
+        std::ofstream outFile(name, std::ios::binary);
         if (!outFile.is_open())
         {
             LOG_ERROR("Failed to open collision mesh file for writing: %s", name.c_str());
@@ -1302,18 +1460,10 @@ namespace TombForge
         }
 
         BinaryWriter writer(outFile);
-        writer.WriteUInt32(static_cast<uint32_t>(asset.vertices.size()));
-        for (const auto& vertex : asset.vertices)
-        {
-            writer.WriteFloat(vertex.x);
-            writer.WriteFloat(vertex.y);
-            writer.WriteFloat(vertex.z);
-        }
-        writer.WriteUInt32(static_cast<uint32_t>(asset.indices.size()));
-        for (const auto& index : asset.indices)
-        {
-            writer.WriteUInt32(index);
-        }
+        writer.WriteUInt64(asset.vertices.size());
+        writer.WriteArray(asset.vertices.data(), asset.vertices.size());
+        writer.WriteUInt64(asset.indices.size());
+        writer.WriteArray(asset.indices.data(), asset.indices.size());
 
         outFile.flush();
         outFile.close();

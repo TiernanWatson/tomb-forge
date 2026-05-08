@@ -11,7 +11,7 @@ namespace TombForge
     public:
         inline virtual bool ShouldCollide(JPH::BroadPhaseLayer layer) const override
         {
-            return m_canCollide;
+            return m_canCollide && layer != BroadPhaseLayers::Character;
         }
 
         inline void SetCanCollide(bool value)
@@ -28,7 +28,7 @@ namespace TombForge
     public:
         inline virtual bool ShouldCollide(JPH::ObjectLayer layer) const override
         {
-            return m_canCollide;
+            return m_canCollide && layer != ObjectLayers::Character;
         }
 
         inline void SetCanCollide(bool value)

@@ -19,6 +19,11 @@ namespace TombForge
         return rotation * glm::vec3{ 0.0f, 0.0f, -1.0f };
     }
 
+    glm::vec3 Transform::UpVector() const
+    {
+        return rotation * glm::vec3{ 0.0f, 1.0f, 0.0f };
+    }
+
     void Transform::SetEulers(glm::vec3 eulerRotations)
     {
         rotation = glm::quat(eulerRotations);
@@ -35,5 +40,13 @@ namespace TombForge
         glm::vec3 scale = scale * t2.scale;
         glm::quat rot = rotation * t2.rotation;
         return Transform(rot, pos, scale);
+    }
+
+    Transform& Transform::operator*=(const Transform& t2)
+    {
+        position += t2.position;
+        scale *= t2.scale;
+        rotation *= t2.rotation;
+        return *this;
     }
 }

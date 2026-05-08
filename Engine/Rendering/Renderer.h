@@ -3,7 +3,7 @@
 #include <memory>
 #include <vector>
 
-#include <glm/detail/type_vec.hpp>
+#include <glm/vec3.hpp>
 #include <unordered_set>
 
 #include "Core/Graphics/AABB.h"
@@ -11,7 +11,6 @@
 #include "Core/Maths/Transform.h"
 #include "Engine/Levels/Level.h"
 #include "Engine/Rendering/Graphics.h"
-#include "Engine/Rendering/Shader.h"
 #include "Engine/Rendering/Texture.h"
 
 namespace TombForge
@@ -19,6 +18,7 @@ namespace TombForge
     struct Model;
     struct Lara;
     struct Camera;
+    struct ShaderInstance;
 
     class AnimPlayer;
 
@@ -68,6 +68,9 @@ namespace TombForge
         // Initializes the renderer and graphics system
         void Initialize(int width, int height);
 
+        // Destroys anything created by Initialize
+        void Destroy();
+
         // When a level is loaded, call this to set it up with the renderer
         bool InitializeLevel(Level& level);
 
@@ -111,7 +114,7 @@ namespace TombForge
 #endif
 
     private:
-        struct ShaderLocations
+        struct CachedPerDrawLocations
         {
             ShaderLocation albedoTexture{};
             ShaderLocation normalTexture{};
@@ -121,23 +124,15 @@ namespace TombForge
             ShaderLocation albedoColor{};
             ShaderLocation roughnessValue{};
             ShaderLocation metalnessValue{};
+            
+            ShaderLocation roughnessChannel{};
+            ShaderLocation metalnessChannel{};
 
             ShaderLocation lights{};
             ShaderLocation lightIndices[8]{};
             ShaderLocation numLights{};
 
             ShaderLocation modelMatrix{};
-            ShaderLocation viewMatrix{};
-            ShaderLocation projectMatrix{};
-
-            ShaderLocation ambientColor{};
-            ShaderLocation ambientIntensity{};
-
-            ShaderLocation dirLightColor{};
-            ShaderLocation dirLightDirection{};
-            ShaderLocation dirLightIntensity{};
-
-            ShaderLocation cameraPosition{};
         };
 
         void InitializeShaders();
@@ -158,6 +153,8 @@ namespace TombForge
 
         void InitializeMaterial(Material& material);
 
+        void DestroyMaterial(Material& material);
+
         void DrawModel(const Model& model, 
             const Transform& transform, 
             const MeshLightArray& lightIndices,
@@ -167,17 +164,21 @@ namespace TombForge
 
         void DrawModelDepth(const Model& model, const Transform& transform);
 
-        void DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices, uint8_t lightCount, const Material* overrideMaterial = nullptr);
+        void DrawMesh(const Mesh& mesh,
+            const MeshLightArray& lightIndices,
+            const uint8_t lightCount,
+            const bool isTransparentPass,
+            const Material* overrideMaterial = nullptr);
 
         void ExtractCameraPlanes(Frustum& result, const glm::mat4& viewProj) const;
 
         OctTree m_octTree{};
 
-        ShaderHandle m_baseShader{};
-        ShaderHandle m_skinnedShader{};
-        ShaderHandle m_lineShader{};
-        ShaderHandle m_gizmoShader{};
-        ShaderHandle m_depthShader{};
+        ShaderInstance* m_baseShader{};
+        ShaderInstance* m_skinnedShader{};
+        ShaderInstance* m_lineShader{};
+        ShaderInstance* m_gizmoShader{};
+        ShaderInstance* m_depthShader{};
 
         Texture m_lightsTexture{};
         Texture m_whiteTexture{};
@@ -185,13 +186,17 @@ namespace TombForge
         Texture m_flatNormal{};
         Texture m_singleChannelWhite{};
 
-        ShaderLocations m_skinnedLocations{};
+        CachedPerDrawLocations m_skinnedLocations{};
 
         glm::mat4 m_viewMatrix{};
         glm::mat4 m_projectionMatrix{};
 
         std::vector<uint32_t> m_opaqueQueue{};
         std::vector<uint32_t> m_transparentQueue{};
+        std::vector<glm::mat4> m_boneMatrixBuffer{ 255, glm::mat4{ 1.0f } };
+
+        UboHandle m_bonesUbo{};
+        UboHandle m_perFrameUbo{};
 
         Graphics& m_graphics;
     };

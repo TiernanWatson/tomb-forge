@@ -77,9 +77,4 @@ namespace TombForge
             GetClosestLights(level, lightReferencePosition, mesh.lights, mesh.lightCount);
         }
     }
-
-    void InitializeCollider(MeshInstance& mesh, const glm::vec3& extents)
-    {
-        
-    }
 }

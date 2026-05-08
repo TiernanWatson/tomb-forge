@@ -21,7 +21,7 @@ namespace TombForge
         const glm::mat4 cameraView = glm::inverse(transform.AsMatrix());
         const glm::mat4 projection = glm::perspective(fovY, aspect, near, far);
 
-        graphics.UseShader(ShaderCache::Get().GetLineShader());
+        graphics.UseShader(ShaderCache::Get().GetLineShader()->GetHandle());
         graphics.SetMatrix4("view", cameraView);
         graphics.SetMatrix4("projection", projection);
         graphics.SetMatrix4("model", glm::mat4{ 1.0f });
@@ -59,7 +59,7 @@ namespace TombForge
 
     void JoltDebugRenderer::DrawTriangle(JPH::RVec3Arg inV1, JPH::RVec3Arg inV2, JPH::RVec3Arg inV3, JPH::ColorArg inColor, ECastShadow inCastShadow)
     {
-        Graphics::Get().UseShader(ShaderCache::Get().GetLineShader());
+        Graphics::Get().UseShader(ShaderCache::Get().GetLineShader()->GetHandle());
 
         glm::vec3 p0{ inV1.GetX(), inV1.GetY(), inV1.GetZ() };
         glm::vec3 p1{ inV2.GetX(), inV2.GetY(), inV2.GetZ() };

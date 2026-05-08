@@ -88,12 +88,14 @@ namespace TombForge
         void OnProjectDirectoryUpdate(const std::string& directory);
         void OnObjectTransformUpdate(size_t index);
         void OnLaraTransformUpdate();
+        void OnLedgeTransformUpdate(size_t index);
 
         void HandleKey(int key, int scancode, int action, int mods);
         void HandleMouseButton(int button, int action, int mods);
         void HandleScroll(float scroll);
 
         bool DrawTransitionUI(AnimSetTransition& transition);
+        bool DrawSoundsList(std::vector<AssetId>& sounds, const std::string& name);
 
         EngineContext& m_ctx;
 

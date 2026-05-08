@@ -480,25 +480,20 @@ namespace TombForge
                         for (size_t c2 = 0; c2 < outCln.Mesh[c].X.size(); c2++)
                         {
                             glm::vec4 colPos(outCln.Mesh[c].X[c2], outCln.Mesh[c].Y[c2], outCln.Mesh[c].Z[c2], 1.0f);
-                            mesh.vertices.emplace_back(adjustment.AsMatrix() * colPos);
+                            colPos = adjustment.AsMatrix() * colPos;
+                            mesh.vertices.emplace_back(colPos.x, colPos.y, colPos.z);
                         }
 
                         for (auto& face : outCln.Mesh[c].Face)
                         {
                             if (face.TrisOrQuads != 3)
                             {
-                                mesh.indices.emplace_back(face.v1);
-                                mesh.indices.emplace_back(face.v2);
-                                mesh.indices.emplace_back(face.v3);
-                                mesh.indices.emplace_back(face.v3);
-                                mesh.indices.emplace_back(face.v4);
-                                mesh.indices.emplace_back(face.v1);
+                                mesh.indices.emplace_back(face.v1, face.v2, face.v3);
+                                mesh.indices.emplace_back(face.v3, face.v4, face.v1);
                             }
                             else
                             {
-                                mesh.indices.emplace_back(face.v1);
-                                mesh.indices.emplace_back(face.v2);
-                                mesh.indices.emplace_back(face.v3);
+                                mesh.indices.emplace_back(face.v1, face.v2, face.v3);
                             }
                         }
                     }

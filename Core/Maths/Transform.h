@@ -10,22 +10,20 @@ namespace TombForge
     /// </summary>
     struct Transform
     {
-        glm::quat rotation{};
-
+        glm::quat rotation{ 1.0f, 0.0f, 0.0f, 0.0f };
         glm::vec3 position{};
-
         glm::vec3 scale{ 1.0f };
 
         glm::mat4 AsMatrix() const;
-
         glm::vec3 EulerRotation() const;
-
         glm::vec3 ForwardVector() const;
+        glm::vec3 UpVector() const;
 
         void SetEulers(glm::vec3 eulerRotations);
         void SetEulers(float x, float y, float z);
 
         Transform operator*(const Transform& t2);
+        Transform& operator*=(const Transform& t2);
     };
 }
 

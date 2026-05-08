@@ -2,6 +2,8 @@
 
 #include <backends/imgui_impl_glfw.h>
 #include <backends/imgui_impl_opengl3.h>
+#include <glad/glad.h>
+#include <glfw3.h>
 #include <glm/gtx/matrix_decompose.hpp>
 #include <imgui.h>
 #include <limits>
@@ -10,17 +12,16 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 
-#include "Core/Graphics/Color.h"
 #include "Core/IO/DevIO.h"
 #include "Core/IO/FileIO.h"
 #include "Core/Maths/Maths.h"
 #include "Engine/Animation/Animation.h"
 #include "Engine/Animation/AnimationSet.h"
 #include "Engine/Animation/Skeleton.h"
-#include "Engine/Audio/Sound.h"
 #include "Engine/Assets/GmxImport.h"
 #include "Engine/Assets/ModelImporter.h"
 #include "Engine/Assets/TextureImport.h"
+#include "Engine/Audio/Sound.h"
 #include "Engine/Engine.h"
 #include "Engine/Player/Input.h"
 #include "Engine/Rendering/JoltDebugRenderer.h"
@@ -117,6 +118,19 @@ namespace TombForge
             case AnimationSet::Transition::Condition::Type::TargetDirectionLess: return "TargetDirectionLess";
             case AnimationSet::Transition::Condition::Type::WantsJump: return "WantsJump";
             case AnimationSet::Transition::Condition::Type::TimeLeft: return "TimeLeft";
+            case AnimationSet::Transition::Condition::Type::IsReaching: return "IsReaching";
+            case AnimationSet::Transition::Condition::Type::ClimbUp: return "ClimbUp";
+            default: return "Unknown";
+            }
+        }
+
+        std::string BlendCurveToString(BlendCurve curve)
+        {
+            switch (curve)
+            {
+            case BlendCurve::Linear: return "Linear";
+            case BlendCurve::EaseIn: return "EaseIn";
+            case BlendCurve::EaseOut: return "EaseOut";
             default: return "Unknown";
             }
         }
@@ -128,6 +142,18 @@ namespace TombForge
             case LARA_STATE_LOCOMOTION: return "Locomotion";
             case LARA_STATE_AIR: return "Air";
             case LARA_STATE_CLIMB: return "Climb";
+            default: return "Unknown";
+            }
+        }
+
+        std::string TextureChannelToString(TextureChannel channel)
+        {
+            switch (channel)
+            {
+            case TEXTURE_CHANNEL_R: return "Red";
+            case TEXTURE_CHANNEL_G: return "Green";
+            case TEXTURE_CHANNEL_B: return "Blue";
+            case TEXTURE_CHANNEL_A: return "Alpha";
             default: return "Unknown";
             }
         }
@@ -169,6 +195,41 @@ namespace TombForge
 
             const std::string modelPath = folder + model->name + ModelFileExt;
             reg.AddAsset(model, modelPath, "");
+        }
+
+        glm::vec3 GetAnimHipRootOffset(const Animation& anim, bool useEnd = false, uint8_t hipBoneIndex = 1, uint8_t rootBoneIndex = 0)
+        {
+            if (hipBoneIndex >= anim.keys.size() || rootBoneIndex >= anim.keys.size())
+            {
+                LOG_ERROR("Animation does not have hip or root bone keys.");
+                return glm::vec3{};
+            }
+
+            const auto& hipKeys = anim.keys[hipBoneIndex];
+            const auto& rootKeys = anim.keys[rootBoneIndex];
+
+            if (hipKeys.positions.empty() || rootKeys.positions.empty())
+            {
+                LOG_ERROR("Animation does not have position keys for the hip and/or root bone.");
+                return glm::vec3{};
+            }
+
+            const size_t hipFrame = useEnd ? (hipKeys.positions.size() - 1) : 0;
+            const size_t rootFrame = useEnd ? (rootKeys.positions.size() - 1) : 0;
+
+            return hipKeys.positions[hipFrame].value - rootKeys.positions[rootFrame].value;
+        }
+
+        glm::vec3 GetAnimHipRootOffsetDifference(const Animation& fromAnim, const Animation& toAnim, bool useFromEnd, bool useToEnd)
+        {
+            const glm::vec3 fromOffset = GetAnimHipRootOffset(fromAnim, useFromEnd);
+            const glm::vec3 toOffset = GetAnimHipRootOffset(toAnim, useToEnd);
+            return toOffset - fromOffset;
+        }
+
+        void BaseWarpFill(BoneWarp& warp, const Animation& fromAnim, const Animation& toAnim, bool useFromEnd, bool useToEnd)
+        {
+            warp.offset = GetAnimHipRootOffsetDifference(fromAnim, toAnim, useFromEnd, useToEnd);
         }
     }
 
@@ -260,6 +321,44 @@ namespace TombForge
 
         auto& level = *m_ctx.level;
 
+        for (auto& l : level.ledges)
+        {
+            Graphics::Get().SetDepthTest(false); // Keep gizmos on top of everything
+
+            Transform objTransform{};
+            objTransform.position = l.point;
+            const glm::vec3 position = objTransform.position;
+
+            constexpr float OverallScale = 0.15f;
+            constexpr float SideScale = 0.2f;
+
+            const float distanceScale = glm::length(m_ctx.camera.transform.position - position) * OverallScale;
+
+            Transform xTransform{};
+            Transform yTransform{};
+            Transform zTransform{};
+
+            xTransform.position = position;
+            yTransform.position = position;
+            zTransform.position = position;
+
+            xTransform.SetEulers(0.0f, glm::radians(90.0f), 0.0f);
+            yTransform.SetEulers(glm::radians(-90.0f), 0.0f, 0.0f);
+
+            xTransform.rotation = objTransform.rotation * xTransform.rotation;
+            yTransform.rotation = objTransform.rotation * yTransform.rotation;
+            zTransform.rotation = objTransform.rotation * zTransform.rotation;
+
+            const glm::vec3 arrowsScale = glm::vec3{ distanceScale * SideScale, distanceScale * SideScale, distanceScale };
+            xTransform.scale = yTransform.scale = zTransform.scale = arrowsScale;
+
+            DrawConeArrow(xTransform.AsMatrix(), glm::vec4{ 1.0f, 0, 0, 1.0f });
+            DrawConeArrow(yTransform.AsMatrix(), glm::vec4{ 0, 1.0f, 0, 1.0f });
+            DrawConeArrow(zTransform.AsMatrix(), glm::vec4{ 0, 0, 1.0f, 1.0f });
+
+            Graphics::Get().SetDepthTest(true);
+        }
+
         if (m_selectedObject < level.meshes.size())
         {
             auto& mesh = level.meshes[m_selectedObject];
@@ -286,8 +385,8 @@ namespace TombForge
             Transform& objTransform = mesh.transform;
             const glm::vec3 position = objTransform.position;
 
-            constexpr float OverallScale = 0.15f;
-            constexpr float SideScale = 0.2f;
+            constexpr float OverallScale = 0.1f;
+            constexpr float SideScale = 0.1f;
 
             const float distanceScale = glm::length(m_ctx.camera.transform.position - position) * OverallScale;
 
@@ -348,6 +447,20 @@ namespace TombForge
                 if (shape)
                 {
                     shape->Draw(m_physicsDebugRenderer, bodies.GetCenterOfMassTransform(obj.rigidbody), JPH::Vec3{ 1.0f, 1.0f, 1.0f }, JPH::Color{ 0,255,0,255 }, false, true);
+                }
+            }
+
+            for (auto& ledge : m_ctx.level->ledges)
+            {
+                if (ledge.bodyId.IsInvalid())
+                {
+                    continue;
+                }
+                JPH::BodyInterface& bodies = m_ctx.physics.system->GetBodyInterface();
+                JPH::ShapeRefC shape = bodies.GetShape(ledge.bodyId);
+                if (shape)
+                {
+                    shape->Draw(m_physicsDebugRenderer, bodies.GetCenterOfMassTransform(ledge.bodyId), JPH::Vec3{ 1.0f, 1.0f, 1.0f }, JPH::Color{ 255,0,0,255 }, false, true);
                 }
             }
         }
@@ -418,7 +531,7 @@ namespace TombForge
     {
         // todo: look at having some kind of editor-only renderer to do this
         Graphics& graphics = graphics.Get();
-        graphics.UseShader(ShaderCache::Get().GetGizmoShader());
+        graphics.UseShader(ShaderCache::Get().GetGizmoShader()->GetHandle());
 
         Camera& cam = m_ctx.camera;
 
@@ -989,6 +1102,18 @@ namespace TombForge
                 m_material->normalTexture = nullptr;
             }
             ImGui::Text("Roughness: %s", m_material->roughnessTexture ? m_material->roughnessTexture->name.c_str() : "None");
+            if (ImGui::BeginCombo("Roughness Channel", TextureChannelToString(m_material->roughnessChannel).c_str()))
+            {
+                for (uint8_t i = 0; i < 4; i++)
+                {
+                    bool selected = m_material->roughnessChannel == i;
+                    if (ImGui::Selectable(TextureChannelToString((TextureChannel)i).c_str(), &selected))
+                    {
+                        m_material->roughnessChannel = (TextureChannel)i;
+                    }
+                }
+                ImGui::EndCombo();
+            }
             if (ImGui::Button("Set Roughness"))
             {
                 const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
@@ -1011,6 +1136,18 @@ namespace TombForge
                 m_material->roughnessTexture = nullptr;
             }
             ImGui::Text("Metallic: %s", m_material->metalnessTexture ? m_material->metalnessTexture->name.c_str() : "None");
+            if (ImGui::BeginCombo("Metalness Channel", TextureChannelToString(m_material->metalnessChannel).c_str()))
+            {
+                for (uint8_t i = 0; i < 4; i++)
+                {
+                    bool selected = m_material->metalnessChannel == i;
+                    if (ImGui::Selectable(TextureChannelToString((TextureChannel)i).c_str(), &selected))
+                    {
+                        m_material->metalnessChannel = (TextureChannel)i;
+                    }
+                }
+                ImGui::EndCombo();
+            }
             if (ImGui::Button("Set Metallic"))
             {
                 const std::string texturePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
@@ -1159,7 +1296,52 @@ namespace TombForge
             anim->isDirty = true;
         }
 
-        ImGui::Separator();
+        ImGui::SeparatorText("Keyframes");
+        static int s_bone{};
+        ImGui::InputInt("Bone", &s_bone);
+        for (size_t i = 0; i < anim->keys[s_bone].positions.size(); i++)
+        {
+            auto& key = anim->keys[s_bone].positions[i];
+            ImGui::PushID(static_cast<int>(i));
+            if (ImGui::CollapsingHeader(("Keyframe " + std::to_string(i)).c_str(), ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                if (ImGui::InputFloat("Time###2", &key.time, 0.0f, 0.0f, "%.2f"))
+                {
+                    if (key.time < 0.0f)
+                    {
+                        key.time = 0.0f;
+                    }
+                    else if (key.time > anim->length)
+                    {
+                        key.time = anim->length;
+                    }
+                    anim->isDirty = true;
+                }
+                if (ImGui::InputFloat3("Translation", &key.value.x, "%.3f"))
+                {
+                    anim->isDirty = true;
+                }
+                if (ImGui::Button("Remove Keyframe"))
+                {
+                    anim->keys[s_bone].positions.erase(anim->keys[s_bone].positions.begin() + i);
+                    anim->isDirty = true;
+                    ImGui::PopID();
+                    break;
+                }
+            }
+            ImGui::PopID();
+        }
+
+        if (ImGui::Button("Add Keyframe"))
+        {
+            PositionKey newKey{};
+            if (anim->keys[s_bone].positions.size() > 0)
+            {
+                newKey.time = anim->keys[s_bone].positions.back().time + (1.0f / anim->framerate);
+            }
+            anim->keys[s_bone].positions.emplace_back(newKey);
+            anim->isDirty = true;
+        }
 
         if (ImGui::Button("Save"))
         {
@@ -1306,6 +1488,36 @@ namespace TombForge
                 if (modified)
                 {
                     
+                }
+            }
+            if (ImGui::BeginListBox("Ledges"))
+            {
+                for (size_t b = 0; b < m_ctx.level->ledges.size(); b++)
+                {
+                    bool selected = m_selectType == ObjectType::LedgePoint && m_selectedObject == b;
+                    if (ImGui::Selectable(std::to_string(b).c_str(), &selected))
+                    {
+                        m_selectedObject = b;
+                        m_selectType = ObjectType::LedgePoint;
+                    }
+                }
+                ImGui::EndListBox();
+            }
+            if (ImGui::Button("Add Ledge"))
+            {
+                m_ctx.level->ledges.emplace_back();
+                OnLedgeTransformUpdate(m_ctx.level->ledges.size() - 1);
+            }
+            ImGui::SeparatorText("Ledge Details");
+            if (m_selectType == ObjectType::LedgePoint && m_selectedObject < m_ctx.level->ledges.size())
+            {
+                bool modified = false;
+                auto& ledge = m_ctx.level->ledges[m_selectedObject];
+                modified |= ImGui::InputFloat3("Position", &ledge.point.x);
+                modified |= ImGui::InputInt("Next Ledge", (int*)&ledge.nextLedge);
+                if (modified)
+                {
+                    OnLedgeTransformUpdate(m_selectedObject);
                 }
             }
             ImGui::EndTabItem();
@@ -1481,6 +1693,7 @@ namespace TombForge
                         // Model references skeleton so keep this first
                         if (result.skeleton && settings.importSkeleton)
                         {
+                            LOG("Saving skeleton: %s with bone count %zu", settings.skeletonPath.c_str(), result.skeleton->bones.size());
                             m_ctx.assetRegistry.AddAsset(result.skeleton, settings.skeletonPath, filePath);
                         }
 
@@ -1546,6 +1759,18 @@ namespace TombForge
 
         if (ImGui::InputFloat3("Position", &m_ctx.lara.transform.position.x))
         {
+            OnLaraTransformUpdate();
+        }
+
+        if (ImGui::Button("Snap to Camera"))
+        {
+            m_ctx.lara.transform.position = m_ctx.camera.transform.position;
+            OnLaraTransformUpdate();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Snap To Start"))
+        {
+            m_ctx.lara.transform.position = m_ctx.level ? m_ctx.level->startPosition : glm::vec3(0.0f);
             OnLaraTransformUpdate();
         }
 
@@ -1794,6 +2019,8 @@ namespace TombForge
             }
         }
 
+        ImGui::InputFloat3("Start Position", &m_ctx.level->startPosition.x);
+
         if (ImGui::Button("Save Level"))
         {
             m_ctx.assetRegistry.SaveAsset(m_ctx.level);
@@ -1871,6 +2098,7 @@ namespace TombForge
                     }
                 }
                 m_animSet->animations.erase(m_animSet->animations.begin() + i);
+                m_animSet->animTags.erase(m_animSet->animTags.begin() + i);
                 i--;
                 m_animSet->isDirty = true;
             }
@@ -1880,7 +2108,24 @@ namespace TombForge
         if (ImGui::Button("Add Animation"))
         {
             m_animSet->animations.emplace_back();
+            m_animSet->animTags.emplace_back();
             m_animSet->isDirty = true;
+        }
+        ImGui::SeparatorText("Animation Tags");
+        if (m_animSet->animTags.size() < m_animSet->animations.size())
+        {
+            m_animSet->animTags.resize(m_animSet->animations.size());
+        }
+        for (size_t i = 0; i < m_animSet->animTags.size(); i++)
+        {
+            ImGui::PushID(static_cast<int>(i));
+
+            if (ImGui::InputText("Tag", &m_animSet->animTags[i]))
+            {
+                m_animSet->isDirty = true;
+            }
+
+            ImGui::PopID();
         }
         ImGui::SeparatorText("Transitions");
         for (size_t t = 0; t < m_animSet->transitions.size(); t++)
@@ -1910,6 +2155,69 @@ namespace TombForge
             m_animSet->transitions.emplace_back();
             m_animSet->isDirty = true;
         }
+        ImGui::SeparatorText("Bone Warps");
+        for (size_t b = 0; b < m_animSet->boneWarps.size(); b++)
+        {
+            bool modified = false;
+            ImGui::PushID(static_cast<int>(b));
+            auto& warp = m_animSet->boneWarps[b];
+            const std::string headerName = std::to_string(b) + ": Anim " + std::to_string(warp.animationIndex);
+            if (ImGui::CollapsingHeader(headerName.c_str(), ImGuiTreeNodeFlags_SpanFullWidth))
+            {
+                ImGui::Indent();
+                modified |= ImGui::InputScalar("Anim Index", ImGuiDataType_U32, &warp.animationIndex);
+                modified |= ImGui::InputScalar("Bone ID", ImGuiDataType_U8, &warp.boneId);
+                modified |= ImGui::InputFloat3("Position Offset", &warp.offset.x, "%.7f");
+                modified |= ImGui::InputFloat("Start Frame", &warp.startFrame, 0.1f, 1.0f, "%.2f");
+                modified |= ImGui::InputFloat("End Frame", &warp.endFrame, 0.1f, 1.0f, "%.2f");
+                ImGui::SameLine();
+                if (ImGui::Button("Snap End to Anim Length"))
+                {
+                    if (warp.animationIndex < m_animSet->animations.size() && m_animSet->animations[warp.animationIndex])
+                    {
+                        warp.endFrame = m_animSet->animations[warp.animationIndex]->length - 1;
+                        modified = true;
+                    }
+                }
+                modified |= ImGui::Checkbox("Reverse", &warp.reverse);
+                static int refFromAnim = 0;
+                static int refToAnim = 0;
+                static bool useEndOfFromAnim = false;
+                static bool useEndOfToAnim = false;
+                ImGui::InputInt("Reference From Animation", &refFromAnim);
+                ImGui::SameLine();
+                ImGui::Checkbox("Use End of From Animation", &useEndOfFromAnim);
+                ImGui::InputInt("Reference To Animation", &refToAnim);
+                ImGui::SameLine();
+                ImGui::Checkbox("Use End of To Animation", &useEndOfToAnim);
+                if (ImGui::Button("Calculate Hip/Root Warp"))
+                {
+                    const Animation& fromAnim = *m_animSet->animations[refFromAnim];
+                    const Animation& toAnim = *m_animSet->animations[refToAnim];
+                    BaseWarpFill(warp, fromAnim, toAnim, useEndOfFromAnim, useEndOfToAnim);
+                    modified = true;
+                }
+                if (ImGui::Button("Remove Warp"))
+                {
+                    m_animSet->boneWarps.erase(m_animSet->boneWarps.begin() + b);
+                    b--;
+                    modified = true;
+                }
+
+                if (modified)
+                {
+                    m_animSet->isDirty = true;
+                }
+                ImGui::Unindent();
+            }
+            ImGui::PopID();
+            ImGui::Separator();
+        }
+        if (ImGui::Button("Add Bone Warp"))
+        {
+            m_animSet->boneWarps.emplace_back();
+            m_animSet->isDirty = true;
+        }
         ImGui::SeparatorText("Defaults");
         if (ImGui::InputInt("Default Animation", (int*)&m_animSet->defaultAnimation))
         {
@@ -1928,6 +2236,10 @@ namespace TombForge
             m_animSet->isDirty = true;
         }
         if (ImGui::Checkbox("Default Should Blend", &m_animSet->defaultShouldBlend))
+        {
+            m_animSet->isDirty = true;
+        }
+        if (ImGui::Checkbox("Default Snap Root", &m_animSet->defaultShouldSnapRoot))
         {
             m_animSet->isDirty = true;
         }
@@ -1961,6 +2273,11 @@ namespace TombForge
                 }
             }
         }
+        DrawSoundsList(m_laraConfig.feetSfx, "Footsteps");
+        DrawSoundsList(m_laraConfig.jumpSfx, "Jump");
+        DrawSoundsList(m_laraConfig.climbupSfx, "Climb Up");
+        DrawSoundsList(m_laraConfig.swooshSfx, "Swoosh");
+        DrawSoundsList(m_laraConfig.handSfx, "Hand");
         ImGui::SeparatorText("Animation Sets");
         for (const auto& [k, v] : m_laraConfig.animSetsForStates)
         {
@@ -2039,6 +2356,18 @@ namespace TombForge
         {
             m_laraConfig.animSetEntries.emplace_back();
         }
+        ImGui::SeparatorText("Animation Variables");
+        ImGui::InputFloat3("Ledge Reach Offset", &m_laraConfig.ledgeReachOffset.x);
+        ImGui::InputFloat3("Ledge Grab Offset", &m_laraConfig.ledgeGrabOffset.x);
+        ImGui::InputFloat3("Ledge Hang Offset", &m_laraConfig.ledgeHangOffset.x);
+        ImGui::SeparatorText("Movement Variables");
+        ImGui::InputFloat("Walk Speed", &m_laraConfig.walkSpeed, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Run Speed", &m_laraConfig.runSpeed, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Jump Height", &m_laraConfig.jumpHeight, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Jump Distance", &m_laraConfig.jumpDistance, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Safe Fall Distance", &m_laraConfig.safeFallDistance, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Death Fall Distance", &m_laraConfig.deathFallDistance, 0.1f, 1.0f, "%.2f");
+        ImGui::InputFloat("Gravity", &m_laraConfig.gravity, 0.1f, 1.0f, "%.2f");
         ImGui::Separator();
         if (ImGui::Button("Save"))
         {
@@ -2172,6 +2501,17 @@ namespace TombForge
         m_ctx.lara.physics->SetPosition(GlmVec3ToJph(m_ctx.lara.transform.position));
     }
 
+    void Editor::OnLedgeTransformUpdate(size_t index)
+    {
+        if (index >= m_ctx.level->ledges.size())
+        {
+            LOG_ERROR("Tried to update transform of ledge index %zu but only %zu ledges in level", index, m_ctx.level->ledges.size());
+            return;
+        }
+        auto& ledge = m_ctx.level->ledges[index];
+        UpdateLedge(m_ctx, index, ledge.nextLedge, ledge.point);
+    }
+
     void Editor::HandleKey(int key, int scancode, int action, int mods)
     {
         if (action == GLFW_PRESS)
@@ -2244,7 +2584,6 @@ namespace TombForge
                 for (size_t i = 0; i < m_ctx.level->meshes.size(); i++)
                 {
                     auto& obj = m_ctx.level->meshes[i];
-                    m_physicsDebugRenderer->DrawColoredLine(m_ctx.camera.transform.position, rayDirection, glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f }, 30.0f);
                     if (RayIntersectsAABB(obj.bounds, m_ctx.camera.transform.position, rayDirection))
                     {
                         if (IsPointInAABB(obj.bounds, m_ctx.camera.transform.position))
@@ -2331,6 +2670,23 @@ namespace TombForge
         {
             modified = true;
         }
+        if (ImGui::Checkbox("Snap Root", &trans.snapRoot))
+        {
+            modified = true;
+        }
+        if (ImGui::BeginCombo("Blend Curve", BlendCurveToString(trans.blendCurve).c_str()))
+        {
+            for (uint8_t eventType = 0; eventType < static_cast<uint8_t>(BlendCurve::Count); eventType++)
+            {
+                bool selected = static_cast<BlendCurve>(eventType) == trans.blendCurve;
+                if (ImGui::Selectable(BlendCurveToString((BlendCurve)eventType).c_str(), &selected))
+                {
+                    trans.blendCurve = static_cast<BlendCurve>(eventType);
+                    modified = true;
+                }
+            }
+            ImGui::EndCombo();
+        }
         ImGui::SeparatorText("Conditions");
         for (size_t c = 0; c < trans.conditions.size(); c++)
         {
@@ -2373,6 +2729,43 @@ namespace TombForge
             trans.conditions.emplace_back();
             modified = true;
         }
+        return modified;
+    }
+
+    bool Editor::DrawSoundsList(std::vector<AssetId>& sounds, const std::string& name)
+    {
+        bool modified = false;
+
+        const std::string headerName = name + " SFX";
+        if (ImGui::CollapsingHeader(headerName.c_str()))
+        {
+            ImGui::SeparatorText(headerName.c_str());
+            for (size_t s = 0; s < sounds.size(); s++)
+            {
+                ImGui::PushID(static_cast<int>(s));
+                ImGui::Text("Asset %zu: %s", s, m_ctx.assetRegistry.GetAssetName(sounds[s]).c_str());
+                ImGui::SameLine();
+                if (ImGui::Button("Change SFX"))
+                {
+                    const std::string filePath = OpenFileDialog(TombSlateFileTypes, NumTombSlateFiles);
+                    if (!filePath.empty())
+                    {
+                        if (const AssetId id = m_ctx.assetRegistry.GetAssetId(filePath); IsValidAssetId(id))
+                        {
+                            sounds[s] = id;
+                            modified = true;
+                        }
+                    }
+                }
+                ImGui::PopID();
+            }
+            if (ImGui::Button("Add SFX"))
+            {
+                sounds.emplace_back(InvalidAssetId);
+                modified = true;
+            }
+        }
+
         return modified;
     }
 }

@@ -30,7 +30,7 @@ namespace TombForge
 #ifdef JPH_ENABLE_ASSERTS
         bool AssertFailedImpl(const char* inExpression, const char* inMessage, const char* inFile, JPH::uint inLine)
         {
-            LOG_ERROR("Jolt Assert Failed: %s, %s, %s, %i", inExpression, inMessage, inFile, inLine);
+            LOG_ERROR("Jolt Assert Failed: %s, %s, %s, %i", inExpression ? inExpression : "", inMessage ? inMessage : "", inFile, inLine);
             return false; // Return false to stop breaking into the debugger
         };
 #endif

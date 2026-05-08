@@ -8,7 +8,6 @@
 #include "Core/Graphics/Line.h"
 #include "Core/Maths/Transform.h"
 #include "Engine/Rendering/Graphics.h"
-#include "Engine/Rendering/Shader.h"
 
 namespace TombForge
 {

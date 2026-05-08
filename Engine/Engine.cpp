@@ -9,6 +9,9 @@
 #include <Jolt/Jolt.h>
 #include <Jolt/Physics/PhysicsSystem.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Constraints/SwingTwistConstraint.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
 #include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 
@@ -25,6 +28,11 @@ namespace TombForge
     namespace
     {
         constexpr float MaxDeltaTime = 0.1f;
+
+        constexpr float CameraHeight = 1.25f;
+        constexpr float CameraDistance = 4.0f;
+        constexpr float CameraRetreatRate = 0.15f;
+        constexpr float CameraApproachRate = 0.05f;
 
         constexpr AssetId DebugTextureId = 0;
         constexpr AssetId DebugMaterialId = 1;
@@ -163,12 +171,14 @@ namespace TombForge
             ctx.renderer.InitializeModel(*arrow);
         }
 
-        JPH::BodyID CreateBody(JPH::BodyInterface& bodies, JPH::Ref<JPH::Shape> shape, JPH::EMotionType motion, JPH::uint64 userData)
+        JPH::BodyID CreateBody(JPH::BodyInterface& bodies, JPH::Ref<JPH::Shape> shape, JPH::EMotionType motion, JPH::uint64 userData, bool isTrigger = false, JPH::ObjectLayer layer = ObjectLayers::NonMoving)
         {
             JPH::BodyCreationSettings settings{};
             settings.mMotionType = motion;
             settings.SetShape(shape);
             settings.mUserData = userData;
+            settings.mIsSensor = isTrigger;
+            settings.mObjectLayer = layer;
 
             return bodies.CreateAndAddBody(settings, JPH::EActivation::Activate);
         }
@@ -206,7 +216,16 @@ namespace TombForge
             characterSettings->mInnerBodyLayer = ObjectLayers::Character;
             characterSettings->mSupportingVolume = JPH::Plane{ JPH::Vec3::sAxisY(), -LaraRadius };
 
-            ctx.lara.physics = new JPH::CharacterVirtual(characterSettings, JPH::RVec3::sZero(), JPH::Quat::sIdentity(), 0, ctx.physics.system);
+            ctx.lara.physics = new JPH::CharacterVirtual(characterSettings, JPH::Vec3::sZero(), JPH::Quat::sIdentity(), 0, ctx.physics.system);
+        }
+
+        JPH::Ref<JPH::Shape> CreateLedgeShape(const LedgePoint& instance, const LedgePoint& next)
+        {
+            const glm::vec3 line = next.point - instance.point;
+            const JPH::Vec3 extents = GlmVec3ToJph({ 0.5f * glm::length(line), 1.0f, 1.0f });
+            const JPH::Vec3 position = GlmVec3ToJph(instance.point + 0.5f * line);
+            const JPH::Quat rotation = JPH::Quat::sRotation(JPH::Vec3::sAxisY(), std::atan2(line.x, line.z));
+            return new JPH::RotatedTranslatedShape(position, rotation, new JPH::BoxShape(extents));
         }
 
         void InitializeColliders(EngineContext& ctx)
@@ -240,49 +259,58 @@ namespace TombForge
                 box.rigidbody = CreateBody(bodies, shapeMoved, JPH::EMotionType::Static, 0);
             }
 
-            for (uint64_t m = 0; m < ctx.level->meshColliders.size(); m++)
+            for (size_t m = 0; m < ctx.level->meshColliders.size(); m++)
             {
                 auto& instance = ctx.level->meshColliders[m];
                 auto& mesh = *ctx.level->collisionMeshes[instance.mesh];
 
-                JPH::IndexedTriangleList triList{};
-                for (size_t i = 0; i < mesh.indices.size(); i += 3)
-                {
-                    JPH::IndexedTriangle tri{};
-                    tri.mIdx[0] = mesh.indices[i];
-                    tri.mIdx[1] = mesh.indices[i + 1];
-                    tri.mIdx[2] = mesh.indices[i + 2];
-                    triList.emplace_back(tri);
-                }
-
-                JPH::VertexList vertList{};
-                for (size_t i = 0; i < mesh.vertices.size(); i++)
-                {
-                    vertList.emplace_back(mesh.vertices[i].x, mesh.vertices[i].y, mesh.vertices[i].z);
-                }
-
-                if (triList.size() * 3 != vertList.size())
+                if (mesh.indices.size() * 3 != mesh.vertices.size())
                 {
                     continue;
                 }
 
                 JPH::MeshShapeSettings settings{};
-                settings.mTriangleVertices = vertList;
-                settings.mIndexedTriangles = triList;
+                settings.mTriangleVertices = mesh.vertices;
+                settings.mIndexedTriangles = mesh.indices;
                 settings.Sanitize();
 
                 JPH::Shape::ShapeResult result = settings.Create();
-
                 if (result.IsValid())
                 {
-                    JPH::Ref<JPH::Shape> meshShape = settings.Create().Get();
+                    ColliderHandle d{};
+                    d.bodyType = COLLIDER_MESH;
+                    d.index = static_cast<uint32_t>(m);
                     auto& bodies = ctx.physics.system->GetBodyInterface();
-                    instance.rigidbody = CreateBody(bodies, meshShape, JPH::EMotionType::Static, m);
+                    instance.rigidbody = CreateBody(bodies, result.Get(), JPH::EMotionType::Static, d.data);
                 }
                 else
                 {
                     LOG_ERROR(result.GetError().c_str());
                 }
+            }
+
+            for (size_t l = 0; l < ctx.level->ledges.size(); l++)
+            {
+                auto& instance = ctx.level->ledges[l];
+                if (instance.nextLedge == 0)
+                {
+                    // Reached the end of the linked list
+                    continue;
+                }
+                const auto& next = ctx.level->ledges[instance.nextLedge];
+
+                const glm::vec3 line = next.point - instance.point;
+                const JPH::Vec3 extents = GlmVec3ToJph({ 0.5f * glm::length(line), 1.0f, 1.0f });
+                const JPH::Vec3 position = GlmVec3ToJph(instance.point + 0.5f * line);
+                const JPH::Quat rotation = JPH::Quat::sRotation(JPH::Vec3::sAxisY(), std::atan2(line.x, line.z));
+                const JPH::Ref<JPH::Shape> ledgeBox = new JPH::RotatedTranslatedShape(position, rotation, new JPH::BoxShape(extents));
+
+                ColliderHandle d{};
+                d.bodyType = COLLIDER_LEDGE;
+                d.index = static_cast<uint32_t>(l);
+
+                auto& bodies = ctx.physics.system->GetBodyInterface();
+                instance.bodyId = CreateBody(bodies, ledgeBox, JPH::EMotionType::Static, d.data, true);
             }
         }
 
@@ -297,7 +325,21 @@ namespace TombForge
             ctx.cameraPitch = Maths::Clamp(ctx.cameraPitch, glm::radians(-89.0f), glm::radians(89.0f));
 
             const glm::quat cameraRotation({ ctx.cameraPitch, ctx.cameraYaw, 0.0f });
-            ctx.camera.transform.rotation = glm::slerp(ctx.camera.transform.rotation, cameraRotation, ctx.deltaTime * 30.0f);
+            ctx.camera.transform.rotation = glm::slerp(ctx.camera.transform.rotation, cameraRotation, ctx.deltaTime * 24.0f);
+        }
+
+        void SmoothDamp(
+            glm::vec3& current, glm::vec3& velocity, const glm::vec3& target,
+            float smoothTime, float deltaTime)
+        {
+            float omega = 2.0f / smoothTime;
+            float x = omega * deltaTime;
+            float exp = 1.0f / (1.0f + x + 0.48f * x * x + 0.235f * x * x * x);
+
+            glm::vec3 change = current - target;
+            glm::vec3 temp = (velocity + omega * change) * deltaTime;
+            velocity = (velocity - omega * temp) * exp;
+            current = target + (change + temp) * exp;
         }
 
         void UpdateCamera(EngineContext& ctx)
@@ -310,10 +352,21 @@ namespace TombForge
 
             if (!ctx.isFreeCamera)
             {
-                glm::vec3 cameraTarget = ctx.lara.transform.position
-                    - ctx.camera.transform.ForwardVector() * 4.0f
-                    + glm::vec3(0.0f, 1.25f, 0.0f);
+                float distance = CameraDistance;
 
+                HitResult result{};
+                Ray ray{ ctx.cameraAnchor + glm::vec3(0.0f, CameraHeight, 0.0f), -ctx.camera.transform.ForwardVector() * distance };
+                if (ctx.physicsInterface.Raycast(ray, result))
+                {
+                    distance = glm::length(result.point - ray.origin) - 0.1f;
+                }
+
+                const float smoothTime = distance < CameraDistance ? CameraApproachRate : CameraRetreatRate;
+                
+                static glm::vec3 cameraVelocity{};
+                SmoothDamp(ctx.cameraAnchor, cameraVelocity, ctx.lara.transform.position, smoothTime, ctx.deltaTime);
+
+                glm::vec3 cameraTarget = ctx.cameraAnchor - ctx.camera.transform.ForwardVector() * distance + glm::vec3(0.0f, CameraHeight, 0.0f);
                 ctx.camera.transform.position = cameraTarget;
             }
             else
@@ -322,7 +375,6 @@ namespace TombForge
                 float backKey = glfwGetKey(ctx.window, GLFW_KEY_S) == GLFW_PRESS ? 1.0f : 0.0f;
                 float leftKey = glfwGetKey(ctx.window, GLFW_KEY_A) == GLFW_PRESS ? -1.0f : 0.0f;
                 float rightKey = glfwGetKey(ctx.window, GLFW_KEY_D) == GLFW_PRESS ? 1.0f : 0.0f;
-
                 float upKey = glfwGetKey(ctx.window, GLFW_KEY_Q) == GLFW_PRESS ? 1.0f : 0.0f;
                 float downKey = glfwGetKey(ctx.window, GLFW_KEY_E) == GLFW_PRESS ? -1.0f : 0.0f;
 
@@ -392,6 +444,11 @@ namespace TombForge
         }
 
         InitPhysics(ctx.physics);
+        ctx.physicsInterface.SetSystem(ctx.physics.system);
+        ctx.physicsInterface.SetObjBroadPhaseFilter(&ctx.physics.objVsBpLayerFilter);
+        ctx.physicsInterface.SetObjectLayerPairFilter(&ctx.physics.objVsObjLayerFilter);
+        ctx.physicsInterface.SetPlayerBpFilter(&ctx.physics.playerBpFilter);
+        ctx.physicsInterface.SetPlayerLayerFilter(&ctx.physics.playerLayerFilter);
 
         ctx.renderer.Initialize(ctx.windowWidth, ctx.windowHeight);
         ctx.camera.aspect = static_cast<float>(ctx.windowWidth) / ctx.windowHeight;
@@ -417,6 +474,14 @@ namespace TombForge
         if (ctx.level)
         {
             UpdateCamera(ctx); // Free camera can still update if paused
+            ctx.audioSystem.SetListenerPosition(ctx.camera.transform.position.x, ctx.camera.transform.position.y, ctx.camera.transform.position.z);
+            ctx.audioSystem.SetListenerDirection(
+                ctx.camera.transform.ForwardVector().x,
+                ctx.camera.transform.ForwardVector().y,
+                ctx.camera.transform.ForwardVector().z,
+                ctx.camera.transform.UpVector().x,
+                ctx.camera.transform.UpVector().y,
+                ctx.camera.transform.UpVector().z);
 
             if (!ctx.isPaused || ctx.wantsFrameAdvance)
             {
@@ -463,6 +528,7 @@ namespace TombForge
     void DestroyEngine(EngineContext& ctx)
     {
         UnloadLevel(ctx);
+        ctx.renderer.Destroy();
 
         DestroyPhysics(ctx.physics);
 
@@ -478,9 +544,10 @@ namespace TombForge
 
         if (ctx.level)
         {
-            ctx.renderer.InitializeLevel(*ctx.level);
             InitializeColliders(ctx);
+            ctx.renderer.InitializeLevel(*ctx.level);
             ctx.lara.transform.position = ctx.level->startPosition;
+            ctx.laraController.SetLevel(ctx.level.get());
         }
         else
         {
@@ -527,29 +594,26 @@ namespace TombForge
 
     void DeleteLevelObject(EngineContext& ctx, size_t index)
     {
-        ColliderId colliderToRemove = ctx.level->meshes[index].collision.id;
-        ColliderType colliderType = ctx.level->meshes[index].collision.type;
+        uint32_t colliderToRemove = ctx.level->meshes[index].collision.index;
+        ColliderType colliderType = ctx.level->meshes[index].collision.bodyType;
+
+        JPH::BodyID bodyId{};
         if (colliderType == COLLIDER_MESH)
         {
-            auto bodyId = ctx.level->meshColliders[colliderToRemove].rigidbody;
-            if (!bodyId.IsInvalid())
-            {
-                auto& bodies = ctx.physics.system->GetBodyInterface();
-                bodies.RemoveBody(bodyId);
-                bodies.DestroyBody(bodyId);
-                ctx.level->meshColliders[colliderToRemove].rigidbody = JPH::BodyID();
-            }
+            bodyId = ctx.level->meshColliders[colliderToRemove].rigidbody;
+            ctx.level->meshColliders[colliderToRemove].rigidbody = JPH::BodyID();
         }
         else if (colliderType == COLLIDER_BOX)
         {
-            auto bodyId = ctx.level->boxColliders[colliderToRemove].rigidbody;
-            if (!bodyId.IsInvalid())
-            {
-                auto& bodies = ctx.physics.system->GetBodyInterface();
-                bodies.RemoveBody(bodyId);
-                bodies.DestroyBody(bodyId);
-                ctx.level->boxColliders[colliderToRemove].rigidbody = JPH::BodyID();
-            }
+            bodyId = ctx.level->boxColliders[colliderToRemove].rigidbody;
+            ctx.level->boxColliders[colliderToRemove].rigidbody = JPH::BodyID();
+        }
+
+        if (!bodyId.IsInvalid())
+        {
+            auto& bodies = ctx.physics.system->GetBodyInterface();
+            bodies.RemoveBody(bodyId);
+            bodies.DestroyBody(bodyId);
         }
 
         ctx.level->meshes[index] = {};
@@ -558,18 +622,6 @@ namespace TombForge
     void SetLaraModel(EngineContext& ctx, const AssetId modelId)
     {
         SetupLara(ctx, modelId);
-    }
-
-    void SetAndInitColliders(EngineContext& ctx, std::vector<BoxCollider>&& colliders)
-    {
-        ctx.level->boxColliders = std::move(colliders);
-        InitializeColliders(ctx);
-    }
-
-    void SetAndInitColliders(EngineContext& ctx, std::vector<MeshCollider>&& colliders)
-    {
-        ctx.level->meshColliders = std::move(colliders);
-        InitializeColliders(ctx);
     }
 
     void SetMouseVisible(GLFWwindow* window, bool visible)
@@ -581,6 +633,35 @@ namespace TombForge
         else
         {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        }
+    }
+
+    void UpdateLedge(EngineContext& ctx, size_t index, size_t nextLedge, const glm::vec3& point)
+    {
+        auto& ledge = ctx.level->ledges[index];
+        ledge.nextLedge = static_cast<uint32_t>(nextLedge);
+        ledge.point = point;
+
+        if (nextLedge > 0 && nextLedge != index && nextLedge < ctx.level->ledges.size())
+        {
+            JPH::Ref<JPH::Shape> shape = CreateLedgeShape(ctx.level->ledges[index], ctx.level->ledges[nextLedge]);
+
+            auto& bodies = ctx.physics.system->GetBodyInterface();
+            if (ledge.bodyId.IsInvalid())
+            {
+                ColliderHandle d{};
+                d.bodyType = COLLIDER_LEDGE;
+                d.index = static_cast<uint32_t>(index);
+                ledge.bodyId = CreateBody(bodies, shape, JPH::EMotionType::Static, d.data, true);
+            }
+            else
+            {
+                bodies.SetShape(
+                    ctx.level->ledges[index].bodyId, 
+                    CreateLedgeShape(ctx.level->ledges[index], ctx.level->ledges[nextLedge]),
+                    false,
+                    JPH::EActivation::Activate);
+            }
         }
     }
 }

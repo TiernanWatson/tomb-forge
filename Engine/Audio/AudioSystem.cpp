@@ -19,6 +19,73 @@ namespace TombForge
         DestroyAudio(m_audioContext);
     }
 
+    void AudioSystem::SetListenerPosition(float x, float y, float z)
+    {
+        alListener3f(AL_POSITION, x, y, z);
+    }
+
+    void AudioSystem::SetListenerDirection(float x, float y, float z, float upX, float upY, float upZ)
+    {
+        float orientation[6] = { x, y, z, upX, upY, upZ };
+        alListenerfv(AL_ORIENTATION, orientation);
+    }
+
+    uint16_t AudioSystem::GenerateBuffer(std::shared_ptr<const Sound> sound)
+    {
+        ALenum format = AL_NONE;
+        if (sound->channels == SOUND_CHANNEL_MONO)
+        {
+            format = AL_FORMAT_MONO16;
+        }
+        else if (sound->channels == SOUND_CHANNEL_STEREO)
+        {
+            format = AL_FORMAT_STEREO16;
+        }
+        else
+        {
+            LOG_ERROR("Unsupported number of channels: %i in file: %s", sound->channels, sound->name);
+            return UINT16_MAX;
+        }
+
+        ALuint buffer;
+        ALuint source;
+        alGenBuffers(1, &buffer);
+        alGenSources(1, &source);
+        alBufferData(buffer, format, sound->data.data(), static_cast<ALsizei>(sound->data.size() * sizeof(int16_t)), sound->sampleRate);
+        m_persistentBuffers.emplace_back(source, buffer);
+
+        return static_cast<uint16_t>(m_persistentBuffers.size() - 1);
+    }
+
+    void AudioSystem::PlayBuffer(uint16_t buffer, float x, float y, float z, float volume, bool loop)
+    {
+        if (buffer >= m_persistentBuffers.size())
+        {
+            LOG_WARNING("Attempted to play invalid audio buffer: %i", buffer);
+            return;
+        }
+        auto& instance = m_persistentBuffers[buffer];
+        alSourcei(instance.source, AL_BUFFER, instance.buffer);
+        alSource3f(instance.source, AL_POSITION, x, y, z);
+        alSourcef(instance.source, AL_GAIN, volume);
+        alSourcei(instance.source, AL_LOOPING, loop ? AL_TRUE : AL_FALSE);
+        alSourcePlay(instance.source);
+    }
+
+    void AudioSystem::DeleteBuffer(uint16_t buffer)
+    {
+        if (buffer >= m_persistentBuffers.size())
+        {
+            LOG_WARNING("Attempted to delete invalid audio buffer: %i", buffer);
+            return;
+        }
+        AudioInstance& instance = m_persistentBuffers[buffer];
+        alDeleteSources(1, &instance.source);
+        alDeleteBuffers(1, &instance.buffer);
+        instance.source = 0;
+        instance.buffer = 0;
+    }
+
     void AudioSystem::PlaySound(std::shared_ptr<const Sound> sound, float volume, bool loop)
     {
         auto it = m_activeSounds.find(sound->id);

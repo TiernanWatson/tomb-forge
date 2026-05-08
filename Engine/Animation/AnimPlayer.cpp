@@ -10,8 +10,32 @@
 
 namespace TombForge
 {
+    namespace
+    {
+        float ComputeBlendAlpha(float t, BlendCurve curve)
+        {
+            t = glm::clamp(t, 0.0f, 1.0f);
+            switch (curve)
+            {
+            case BlendCurve::Linear:
+                return t;
+            case BlendCurve::EaseIn:
+                return t * t;
+            case BlendCurve::EaseOut:
+                return 1.0f - (1.0f - t) * (1.0f - t);
+            default:
+                return t;
+            }
+        }
+    }
+
     void AnimPlayer::Play(std::shared_ptr<const Animation> animation, bool loop, float targetFrame)
     {
+        m_nextEvent = 0;
+        m_prevBonesOffsets = m_bonesOffsets;
+
+        ResetBoneOffsets();
+
         m_currentAnim.Clear();
         m_currentAnim.clip = animation;
         m_currentAnim.isLooping = loop;
@@ -24,7 +48,7 @@ namespace TombForge
         m_wasInterrupted = false;
     }
 
-    void AnimPlayer::BlendTo(std::shared_ptr<const Animation> animation, float frames, bool loop, float targetFrame)
+    void AnimPlayer::BlendTo(std::shared_ptr<const Animation> animation, float frames, bool loop, float targetFrame, bool snapRoot, BlendCurve blendCurve)
     {
         if (m_isBlending)
         {
@@ -35,7 +59,12 @@ namespace TombForge
         else
         {
             m_previousAnim = m_currentAnim;
+            m_prevBonesOffsets = m_bonesOffsets;
+            
+            ResetBoneOffsets();
         }
+
+        m_nextEvent = 0;
 
         m_currentAnim.Clear();
         m_currentAnim.clip = animation;
@@ -48,6 +77,7 @@ namespace TombForge
         m_isBlending = true;
         m_blendStart = m_currentAnim.currentFrame;
         m_blendTime = frames;
+        m_snapRoot = snapRoot;
     }
 
     void AnimPlayer::Process(float deltaTime)
@@ -65,7 +95,7 @@ namespace TombForge
             const BoneKeys& keys = m_currentAnim.clip->keys[boneIndex];
             Transform& finalPose = m_finalPose.bones[boneIndex];
 
-            finalPose.position = GetPosition(keys.positions, m_currentAnim.currentFrame, m_defaultPositions[boneIndex], m_currentAnim.isLooping, boneIndex == 0);
+            finalPose.position = GetPosition(keys.positions, m_currentAnim.currentFrame, m_defaultPositions[boneIndex], m_currentAnim.isLooping, boneIndex == 0) + m_bonesOffsets[boneIndex];
             if (boneIndex == 0 && extractRootMovement)
             {
                 m_rootDelta = m_currentAnim.CalculateRootDelta(finalPose.position);
@@ -81,16 +111,17 @@ namespace TombForge
 
             finalPose.scale = GetScale(keys.scales, m_currentAnim.currentFrame, m_defaultScales[boneIndex]);
 
-            if (m_isBlending)
+            if (m_isBlending && (!m_snapRoot || boneIndex != 0))
             {
                 const BoneKeys& previousKeys = m_previousAnim.clip->keys[boneIndex];
-                const float blendDelta = (m_currentAnim.currentFrame - m_blendStart) / m_blendTime;
+                const float t = (m_currentAnim.currentFrame - m_blendStart) / m_blendTime;
+                const float blendDelta = ComputeBlendAlpha(t, m_blendCurve);
                 Transform& blendPose = m_blendPose.bones[boneIndex];
 
                 if (!m_wasInterrupted)
                 {
                     // When interrupted, we use the last computed pose staticly, so we can have responsiveness and visual fidelity
-                    blendPose.position = GetPosition(previousKeys.positions, m_previousAnim.currentFrame, m_defaultPositions[boneIndex], m_previousAnim.isLooping, boneIndex == 0);
+                    blendPose.position = GetPosition(previousKeys.positions, m_previousAnim.currentFrame, m_defaultPositions[boneIndex], m_previousAnim.isLooping, boneIndex == 0) + m_prevBonesOffsets[boneIndex];
                     blendPose.rotation = GetRotation(previousKeys.rotations, m_previousAnim.currentFrame, m_defaultRotations[boneIndex]);
                     blendPose.scale = GetScale(previousKeys.scales, m_previousAnim.currentFrame, m_defaultScales[boneIndex]);
                 }
@@ -141,7 +172,7 @@ namespace TombForge
             m_finalMatrices[b] = m_finalMatrices[b] * m_skeleton->bones[b].offset;
         }
 
-        TriggerEvents(m_currentAnim.clip->events, m_currentAnim.currentFrame);
+        TriggerEvents(m_currentAnim.clip->events, m_currentAnim.currentFrame, m_currentAnim.previousFrame);
 
         m_currentAnim.AdvanceFrame(deltaTime);
 
@@ -169,6 +200,7 @@ namespace TombForge
         m_defaultPositions.resize(boneCount);
         m_defaultRotations.resize(boneCount);
         m_defaultScales.resize(boneCount);
+        m_bonesOffsets.resize(boneCount);
         m_finalPose.bones.resize(boneCount);
         m_blendPose.bones.resize(boneCount);
 
@@ -289,7 +321,7 @@ namespace TombForge
         return rotations[rotations.size() - 1].value;
     }
 
-    void AnimPlayer::TriggerEvents(const std::vector<EventKey>& events, float frame)
+    void AnimPlayer::TriggerEvents(const std::vector<EventKey>& events, float frame, float previousFrame)
     {
         if (!m_eventCallback || events.size() == 0)
         {
@@ -300,22 +332,22 @@ namespace TombForge
         {
             if (frame < events[0].time)
             {
-                m_lastEvent = 0;
+                m_nextEvent = 0;
             }
 
-            if (m_lastEvent == 0 && frame > events[0].time)
+            if (m_nextEvent == 0 && frame > events[0].time)
             {
-                m_lastEvent = 1;
+                m_nextEvent = 1;
                 m_eventCallback((AnimEvent)events[0].value);
             }
         }
         else
         {
-            const size_t nextEvent = fmodf(m_lastEvent + 1, events.size());
-            if (frame > events[nextEvent].time)
+            // Second condition allows for events to fire if we loop back
+            if (frame >= events[m_nextEvent].time && (previousFrame < events[m_nextEvent].time || frame <= previousFrame))
             {
-                m_lastEvent = nextEvent;
-                m_eventCallback((AnimEvent)events[nextEvent].value);
+                m_eventCallback((AnimEvent)events[m_nextEvent].value);
+                m_nextEvent = fmodf(++m_nextEvent, events.size());
             }
         }
     }

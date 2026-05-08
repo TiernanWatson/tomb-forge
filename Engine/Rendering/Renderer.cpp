@@ -14,6 +14,63 @@
 
 namespace TombForge
 {
+    namespace
+    {
+        // Shared UBO data for every frame. Must match the std140 layout in shaders.
+        struct PerFrameData
+        {
+            glm::mat4 view{};
+            glm::mat4 projection{};
+            glm::vec3 cameraPos{};
+            float pad0{}; // Padding to ensure 16 byte alignment
+            glm::vec3 ambientColor{};
+            float ambientIntensity{};
+            glm::vec3 dirLightColor{};
+            float dirLightIntensity{};
+            glm::vec3 dirLightDirection{};
+            float pad1{}; // Padding to ensure 16 byte alignment
+        };
+
+        constexpr int NumLinesPerBox = 12;
+
+        constexpr glm::mat4 IdentityMatrix = glm::mat4(1.0f);
+
+        constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedMesh.vert";
+        constexpr char const* PBRFragmentShaderPath = "Shaders\\ForwardLit_PBR.frag";
+        constexpr char const* StaticVertexShaderPath = "Shaders\\StaticMesh.vert";
+        constexpr char const* LineVertexShaderPath = "Shaders\\PositionColor.vert";
+        constexpr char const* ColorFragmentShaderPath = "Shaders\\VertexColorUnlit.frag";
+        constexpr char const* GizmoFragmentShaderPath = "Shaders\\UniformColorUnlit.frag";
+
+        void AddBoxToLineBuffer(std::vector<Line>& lines, const glm::vec4& color, const glm::vec3& min, const glm::vec3& max)
+        {
+            const glm::vec3 bottomFrontLeft = min;
+            const glm::vec3 bottomFrontRight = { max.x, min.y, min.z };
+            const glm::vec3 bottomBackRight = { max.x, min.y, max.z };
+            const glm::vec3 bottomBackLeft = { min.x, min.y, max.z };
+
+            const glm::vec3 topFrontLeft = { min.x, max.y, min.z };
+            const glm::vec3 topFrontRight = { max.x, max.y, min.z };
+            const glm::vec3 topBackRight = max;
+            const glm::vec3 topBackLeft = { min.x, max.y, max.z };
+
+            lines.emplace_back(LineVertex{ bottomFrontLeft, color }, LineVertex{ bottomFrontRight, color });
+            lines.emplace_back(LineVertex{ bottomFrontRight, color }, LineVertex{ bottomBackRight, color });
+            lines.emplace_back(LineVertex{ bottomBackRight, color }, LineVertex{ bottomBackLeft, color });
+            lines.emplace_back(LineVertex{ bottomBackLeft, color }, LineVertex{ bottomFrontLeft, color });
+
+            lines.emplace_back(LineVertex{ bottomFrontLeft, color }, LineVertex{ topFrontLeft, color });
+            lines.emplace_back(LineVertex{ bottomFrontRight, color }, LineVertex{ topFrontRight, color });
+            lines.emplace_back(LineVertex{ bottomBackRight, color }, LineVertex{ topBackRight, color });
+            lines.emplace_back(LineVertex{ bottomBackLeft, color }, LineVertex{ topBackLeft, color });
+
+            lines.emplace_back(LineVertex{ topFrontLeft, color }, LineVertex{ topFrontRight, color });
+            lines.emplace_back(LineVertex{ topFrontRight, color }, LineVertex{ topBackRight, color });
+            lines.emplace_back(LineVertex{ topBackRight, color }, LineVertex{ topBackLeft, color });
+            lines.emplace_back(LineVertex{ topBackLeft, color }, LineVertex{ topFrontLeft, color });
+        }
+    }
+
     Renderer::Renderer()
         : m_graphics{ Graphics::Get() }
     {
@@ -22,8 +79,43 @@ namespace TombForge
     void Renderer::Initialize(int width, int height)
     {
         m_graphics.Initialize(width, height);
+
         InitializeShaders();
         InitializeDefaultTextures();
+
+        m_bonesUbo = m_graphics.CreateUbo();
+        m_perFrameUbo = m_graphics.CreateUbo();
+    }
+
+    void Renderer::Destroy()
+    {
+        m_graphics.DestroyUbo(m_perFrameUbo);
+        m_graphics.DestroyUbo(m_bonesUbo);
+
+        if (m_lightsTexture.gpuHandle.IsValid())
+        {
+            m_graphics.DestroyTextureInstance(m_lightsTexture.gpuHandle);
+        }
+
+        if (m_whiteTexture.gpuHandle.IsValid())
+        {
+            m_graphics.DestroyTextureInstance(m_whiteTexture.gpuHandle);
+        }
+
+        if (m_magentaTexture.gpuHandle.IsValid())
+        {
+            m_graphics.DestroyTextureInstance(m_magentaTexture.gpuHandle);
+        }
+
+        if (m_flatNormal.gpuHandle.IsValid())
+        {
+            m_graphics.DestroyTextureInstance(m_flatNormal.gpuHandle);
+        }
+
+        if (m_singleChannelWhite.gpuHandle.IsValid())
+        {
+            m_graphics.DestroyTextureInstance(m_singleChannelWhite.gpuHandle);
+        }
     }
 
     bool Renderer::InitializeLevel(Level& level)
@@ -86,12 +178,9 @@ namespace TombForge
                 m_graphics.DestroyMeshInstance(mesh.gpuHandle);
             }
 
-            if (mesh.material && mesh.material->albedoTexture)
+            if (mesh.material)
             {
-                if (mesh.material->albedoTexture->gpuHandle.IsValid())
-                {
-                    //mesh.mesh->material->albedoTexture->gpuHandle = m_graphics.DestroyTextureInstance(*mesh.material->albedoTexture);
-                }
+                DestroyMaterial(*mesh.material);
             }
         }
     }
@@ -108,21 +197,23 @@ namespace TombForge
 
     void Renderer::RenderLevel(const Level& level, const Lara& lara, const Camera& camera)
     {
-        m_graphics.UseShader(m_skinnedShader);
+        m_graphics.UseShader(m_skinnedShader->GetHandle());
 
         m_viewMatrix = glm::inverse(camera.transform.AsMatrix());
-        m_graphics.SetMatrix4(m_skinnedLocations.viewMatrix, m_viewMatrix);
-
         m_projectionMatrix = glm::perspective(camera.fovY, camera.aspect, camera.near, camera.far);
-        m_graphics.SetMatrix4(m_skinnedLocations.projectMatrix, m_projectionMatrix);
 
-        // Color values in shader should be linear space
-        m_graphics.SetVec3(m_skinnedLocations.ambientColor, SRGBToLinear(level.ambientColor));
-        m_graphics.SetFloat(m_skinnedLocations.ambientIntensity, level.ambientStrength);
-        m_graphics.SetVec3(m_skinnedLocations.dirLightColor, SRGBToLinear(level.directionalLight.color));
-        m_graphics.SetVec3(m_skinnedLocations.dirLightDirection, glm::normalize(level.directionalLight.dir));
-        m_graphics.SetFloat(m_skinnedLocations.dirLightIntensity, level.directionalLight.intensity);
-        m_graphics.SetVec3(m_skinnedLocations.cameraPosition, camera.transform.position);
+        PerFrameData perFrameData{};
+        perFrameData.view = m_viewMatrix;
+        perFrameData.projection = m_projectionMatrix;
+        perFrameData.cameraPos = camera.transform.position;
+        perFrameData.ambientColor = SRGBToLinear(level.ambientColor);
+        perFrameData.ambientIntensity = level.ambientStrength;
+        perFrameData.dirLightColor = SRGBToLinear(level.directionalLight.color);
+        perFrameData.dirLightIntensity = level.directionalLight.intensity;
+        perFrameData.dirLightDirection = glm::normalize(level.directionalLight.dir);
+
+        m_graphics.UpdateUbo(m_perFrameUbo, &perFrameData, sizeof(PerFrameData));
+        m_graphics.BindUbo(m_perFrameUbo, 1); // Binding point 1 for per-frame data
 
         if (m_lightsTexture.gpuHandle.IsValid())
         {
@@ -148,10 +239,12 @@ namespace TombForge
             MeshLightArray lightIndices{};
             GetClosestLights(level, lara.transform.position, lightIndices, lightCount);
 
+            const auto& finalMatrices = lara.animPlayer.FinalBoneMatrices();
+
             Transform finalTransform = lara.transform;
             finalTransform.rotation *= glm::quat(lara.modelRotationOffset);
-            DrawModel(*lara.model.get(), finalTransform, lightIndices, lightCount, false, &lara.animPlayer.FinalBoneMatrices());
-            DrawModel(*lara.model.get(), finalTransform, lightIndices, lightCount, true, &lara.animPlayer.FinalBoneMatrices());
+            DrawModel(*lara.model.get(), finalTransform, lightIndices, lightCount, false, &finalMatrices);
+            DrawModel(*lara.model.get(), finalTransform, lightIndices, lightCount, true, &finalMatrices);
         }
     }
 
@@ -189,7 +282,7 @@ namespace TombForge
 
     void Renderer::RenderWireframe(const Model& model, const Transform& transform, const Camera& camera)
     {
-        m_graphics.UseShader(m_gizmoShader); // Just does a color - same thing
+        m_graphics.UseShader(m_gizmoShader->GetHandle()); // Just does a color - same thing
         m_graphics.SetVec4("color", { 1.0f, 1.0f, 1.0f, 1.0f });
         m_graphics.SetMatrix4("model", transform.AsMatrix());
 
@@ -207,7 +300,7 @@ namespace TombForge
 
     void Renderer::RenderWireframe(const Mesh& model, const Transform& transform, const Camera& camera)
     {
-        m_graphics.UseShader(m_gizmoShader); // Just does a color - same thing
+        m_graphics.UseShader(m_gizmoShader->GetHandle()); // Just does a color - same thing
         m_graphics.SetVec4("color", { 1.0f, 1.0f, 1.0f, 1.0f });
         m_graphics.SetMatrix4("model", transform.AsMatrix());
 
@@ -223,7 +316,7 @@ namespace TombForge
     void Renderer::DrawOctree(const glm::vec4& color, const Camera& camera, uint32_t contains)
     {
         std::vector<Line> lines{};
-        lines.reserve(m_octTree.nodes.size() * 12);
+        lines.reserve(m_octTree.nodes.size() * NumLinesPerBox);
 
         for (const auto& node : m_octTree.nodes)
         {
@@ -234,98 +327,39 @@ namespace TombForge
                 for (uint32_t c : node.contains)
                 {
                     if (c == contains)
+                    {
                         found = true;
+                        break;
+                    }
                 }
 
                 if (!found)
+                {
                     continue;
+                }
             }
-
-            const glm::vec3& min = node.bounds.min;
-            const glm::vec3& max = node.bounds.max;
-
-            const glm::vec3 bottomFrontLeft = min;
-            const glm::vec3 bottomFrontRight = { max.x, min.y, min.z };
-            const glm::vec3 bottomBackRight = { max.x, min.y, max.z };
-            const glm::vec3 bottomBackLeft = { min.x, min.y, max.z };
-
-            const glm::vec3 topFrontLeft = { min.x, max.y, min.z };
-            const glm::vec3 topFrontRight = { max.x, max.y, min.z };
-            const glm::vec3 topBackRight = max;
-            const glm::vec3 topBackLeft = { min.x, max.y, max.z };
-
-            lines.emplace_back(LineVertex{ bottomFrontLeft, color }, LineVertex{ bottomFrontRight, color });
-            lines.emplace_back(LineVertex{ bottomFrontRight, color }, LineVertex{ bottomBackRight, color });
-            lines.emplace_back(LineVertex{ bottomBackRight, color }, LineVertex{ bottomBackLeft, color });
-            lines.emplace_back(LineVertex{ bottomBackLeft, color }, LineVertex{ bottomFrontLeft, color });
-
-            lines.emplace_back(LineVertex{ bottomFrontLeft, color }, LineVertex{ topFrontLeft, color });
-            lines.emplace_back(LineVertex{ bottomFrontRight, color }, LineVertex{ topFrontRight, color });
-            lines.emplace_back(LineVertex{ bottomBackRight, color }, LineVertex{ topBackRight, color });
-            lines.emplace_back(LineVertex{ bottomBackLeft, color }, LineVertex{ topBackLeft, color });
-
-            lines.emplace_back(LineVertex{ topFrontLeft, color }, LineVertex{ topFrontRight, color });
-            lines.emplace_back(LineVertex{ topFrontRight, color }, LineVertex{ topBackRight, color });
-            lines.emplace_back(LineVertex{ topBackRight, color }, LineVertex{ topBackLeft, color });
-            lines.emplace_back(LineVertex{ topBackLeft, color }, LineVertex{ topFrontLeft, color });
+            AddBoxToLineBuffer(lines, color, node.bounds.min, node.bounds.max);
         }
 
-        m_graphics.UseShader(m_lineShader);
+        m_graphics.UseShader(m_lineShader->GetHandle());
 
-        const glm::mat4 view = glm::inverse(camera.transform.AsMatrix());
-        m_graphics.SetMatrix4("view", view);
-
-        const glm::mat4 projection = glm::perspective(camera.fovY, camera.aspect, camera.near, camera.far);
-        m_graphics.SetMatrix4("projection", projection);
+        SetCamera(camera.transform, camera.fovY, camera.aspect, camera.near, camera.far);
 
         m_graphics.SetMatrix4("model", glm::mat4{ 1.0f });
-
         m_graphics.DrawLines(lines);
     }
 
     void Renderer::DrawBox(const AABB& aabb, const glm::vec4& color, const Camera& camera)
     {
         std::vector<Line> lines{};
-        lines.reserve(12);
+        lines.reserve(NumLinesPerBox);
+        AddBoxToLineBuffer(lines, color, aabb.min, aabb.max);
 
-        const glm::vec3& min = aabb.min;
-        const glm::vec3& max = aabb.max;
+        m_graphics.UseShader(m_lineShader->GetHandle());
 
-        const glm::vec3 bottomFrontLeft = min;
-        const glm::vec3 bottomFrontRight = { max.x, min.y, min.z };
-        const glm::vec3 bottomBackRight = { max.x, min.y, max.z };
-        const glm::vec3 bottomBackLeft = { min.x, min.y, max.z };
-
-        const glm::vec3 topFrontLeft = { min.x, max.y, min.z };
-        const glm::vec3 topFrontRight = { max.x, max.y, min.z };
-        const glm::vec3 topBackRight = max;
-        const glm::vec3 topBackLeft = { min.x, max.y, max.z };
-
-        lines.emplace_back(LineVertex{ bottomFrontLeft, color }, LineVertex{ bottomFrontRight, color });
-        lines.emplace_back(LineVertex{ bottomFrontRight, color }, LineVertex{ bottomBackRight, color });
-        lines.emplace_back(LineVertex{ bottomBackRight, color }, LineVertex{ bottomBackLeft, color });
-        lines.emplace_back(LineVertex{ bottomBackLeft, color }, LineVertex{ bottomFrontLeft, color });
-
-        lines.emplace_back(LineVertex{ bottomFrontLeft, color }, LineVertex{ topFrontLeft, color });
-        lines.emplace_back(LineVertex{ bottomFrontRight, color }, LineVertex{ topFrontRight, color });
-        lines.emplace_back(LineVertex{ bottomBackRight, color }, LineVertex{ topBackRight, color });
-        lines.emplace_back(LineVertex{ bottomBackLeft, color }, LineVertex{ topBackLeft, color });
-
-        lines.emplace_back(LineVertex{ topFrontLeft, color }, LineVertex{ topFrontRight, color });
-        lines.emplace_back(LineVertex{ topFrontRight, color }, LineVertex{ topBackRight, color });
-        lines.emplace_back(LineVertex{ topBackRight, color }, LineVertex{ topBackLeft, color });
-        lines.emplace_back(LineVertex{ topBackLeft, color }, LineVertex{ topFrontLeft, color });
-
-        m_graphics.UseShader(m_lineShader);
-
-        const glm::mat4 view = glm::inverse(camera.transform.AsMatrix());
-        m_graphics.SetMatrix4("view", view);
-
-        const glm::mat4 projection = glm::perspective(camera.fovY, camera.aspect, camera.near, camera.far);
-        m_graphics.SetMatrix4("projection", projection);
+        SetCamera(camera.transform, camera.fovY, camera.aspect, camera.near, camera.far);
 
         m_graphics.SetMatrix4("model", glm::mat4{ 1.0f });
-
         m_graphics.DrawLines(lines);
     }
 
@@ -337,46 +371,60 @@ namespace TombForge
         m_depthShader = ShaderCache::Get().GetDepthShader();
         m_lineShader = ShaderCache::Get().GetLineShader();
         m_gizmoShader = ShaderCache::Get().GetGizmoShader();
-        m_graphics.UseShader(m_skinnedShader);
+        m_graphics.UseShader(m_skinnedShader->GetHandle());
 
-        m_skinnedLocations.albedoTexture = m_graphics.GetLocation(m_skinnedShader, "diffuseTexture");
-        m_skinnedLocations.normalTexture = m_graphics.GetLocation(m_skinnedShader, "normalTexture");
-        m_skinnedLocations.roughnessTexture = m_graphics.GetLocation(m_skinnedShader, "roughnessTexture");
-        m_skinnedLocations.metalnessTexture = m_graphics.GetLocation(m_skinnedShader, "metalnessTexture");
+        m_skinnedShader->CacheLocations({
+            "diffuseTexture",
+            "normalTexture",
+            "roughnessTexture",
+            "metalnessTexture",
+            "material.albedoColor",
+            "material.roughnessValue",
+            "material.metalnessValue",
+            "roughnessChannel",
+            "metalnessChannel",
+            "lightsTexture",
+            "numLights",
+            "lightIndices[0]",
+            "lightIndices[1]",
+            "lightIndices[2]",
+            "lightIndices[3]",
+            "lightIndices[4]",
+            "lightIndices[5]",
+            "lightIndices[6]",
+            "lightIndices[7]",
+            "model"
+            });
 
-        m_skinnedLocations.albedoColor = m_graphics.GetLocation(m_skinnedShader, "material.albedoColor");
-        m_skinnedLocations.roughnessValue = m_graphics.GetLocation(m_skinnedShader, "material.roughnessValue");
-        m_skinnedLocations.metalnessValue = m_graphics.GetLocation(m_skinnedShader, "material.metalnessValue");
+        m_skinnedLocations.albedoTexture = m_skinnedShader->GetLocation("diffuseTexture");
+        m_skinnedLocations.normalTexture = m_skinnedShader->GetLocation("normalTexture");
+        m_skinnedLocations.roughnessTexture = m_skinnedShader->GetLocation("roughnessTexture");
+        m_skinnedLocations.metalnessTexture = m_skinnedShader->GetLocation("metalnessTexture");
 
-        m_skinnedLocations.lights = m_graphics.GetLocation(m_skinnedShader, "lightsTexture");
-        m_skinnedLocations.numLights = m_graphics.GetLocation(m_skinnedShader, "numLights");
-        m_skinnedLocations.lightIndices[0] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[0]");
-        m_skinnedLocations.lightIndices[1] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[1]");
-        m_skinnedLocations.lightIndices[2] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[2]");
-        m_skinnedLocations.lightIndices[3] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[3]");
-        m_skinnedLocations.lightIndices[4] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[4]");
-        m_skinnedLocations.lightIndices[5] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[5]");
-        m_skinnedLocations.lightIndices[6] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[6]");
-        m_skinnedLocations.lightIndices[7] = m_graphics.GetLocation(m_skinnedShader, "lightIndices[7]");
+        m_skinnedLocations.albedoColor = m_skinnedShader->GetLocation("material.albedoColor");
+        m_skinnedLocations.roughnessValue = m_skinnedShader->GetLocation("material.roughnessValue");
+        m_skinnedLocations.metalnessValue = m_skinnedShader->GetLocation("material.metalnessValue");
+        m_skinnedLocations.roughnessChannel = m_skinnedShader->GetLocation("roughnessChannel");
+        m_skinnedLocations.metalnessChannel = m_skinnedShader->GetLocation("metalnessChannel");
 
-        m_skinnedLocations.modelMatrix = m_graphics.GetLocation(m_skinnedShader, "model");
-        m_skinnedLocations.viewMatrix = m_graphics.GetLocation(m_skinnedShader, "view");
-        m_skinnedLocations.projectMatrix = m_graphics.GetLocation(m_skinnedShader, "projection");
+        m_skinnedLocations.lights = m_skinnedShader->GetLocation("lightsTexture");
+        m_skinnedLocations.numLights = m_skinnedShader->GetLocation("numLights");
+        m_skinnedLocations.lightIndices[0] = m_skinnedShader->GetLocation("lightIndices[0]");
+        m_skinnedLocations.lightIndices[1] = m_skinnedShader->GetLocation("lightIndices[1]");
+        m_skinnedLocations.lightIndices[2] = m_skinnedShader->GetLocation("lightIndices[2]");
+        m_skinnedLocations.lightIndices[3] = m_skinnedShader->GetLocation("lightIndices[3]");
+        m_skinnedLocations.lightIndices[4] = m_skinnedShader->GetLocation("lightIndices[4]");
+        m_skinnedLocations.lightIndices[5] = m_skinnedShader->GetLocation("lightIndices[5]");
+        m_skinnedLocations.lightIndices[6] = m_skinnedShader->GetLocation("lightIndices[6]");
+        m_skinnedLocations.lightIndices[7] = m_skinnedShader->GetLocation("lightIndices[7]");
 
-        m_skinnedLocations.ambientColor = m_graphics.GetLocation(m_skinnedShader, "ambientColor");
-        m_skinnedLocations.ambientIntensity = m_graphics.GetLocation(m_skinnedShader, "ambientStrength");
-
-        m_skinnedLocations.dirLightColor = m_graphics.GetLocation(m_skinnedShader, "dirLight.color");
-        m_skinnedLocations.dirLightDirection = m_graphics.GetLocation(m_skinnedShader, "dirLight.direction");
-        m_skinnedLocations.dirLightIntensity = m_graphics.GetLocation(m_skinnedShader, "dirLight.strength");
-
-        m_skinnedLocations.cameraPosition = m_graphics.GetLocation(m_skinnedShader, "cameraPosition");
+        m_skinnedLocations.modelMatrix = m_skinnedShader->GetLocation("model");
     }
 
     void Renderer::InitializeDefaultTextures()
     {
         // Setup white texture
-        const ColorByte white = 255;
+        constexpr ColorByte white = 255;
         m_whiteTexture.width = m_whiteTexture.height = 1;
         m_whiteTexture.format = TextureFormat::RGB;
         m_whiteTexture.data.emplace_back(white);
@@ -395,18 +443,19 @@ namespace TombForge
         m_magentaTexture.gpuHandle = m_graphics.CreateTextureInstance(m_magentaTexture);
 
         // Setup flat normal map
+        constexpr ColorByte normalRG = 128;
         m_flatNormal.width = m_flatNormal.height = 1;
         m_flatNormal.format = TextureFormat::RGB;
-        m_flatNormal.data.emplace_back(128);
-        m_flatNormal.data.emplace_back(128);
-        m_flatNormal.data.emplace_back(255);
+        m_flatNormal.data.emplace_back(normalRG);
+        m_flatNormal.data.emplace_back(normalRG);
+        m_flatNormal.data.emplace_back(white);
         m_flatNormal.sRGB = false;
         m_flatNormal.gpuHandle = m_graphics.CreateTextureInstance(m_flatNormal);
 
         // Setup white single channel texture (for roughness and metallic)
         m_singleChannelWhite.width = m_singleChannelWhite.height = 1;
         m_singleChannelWhite.format = TextureFormat::R;
-        m_singleChannelWhite.data.emplace_back(255);
+        m_singleChannelWhite.data.emplace_back(white);
         m_singleChannelWhite.sRGB = false;
         m_singleChannelWhite.filter = TextureFilter::Nearest;
         m_singleChannelWhite.gpuHandle = m_graphics.CreateTextureInstance(m_singleChannelWhite);
@@ -479,6 +528,9 @@ namespace TombForge
 
     void Renderer::PerformRenderPass(const Level& level, std::vector<uint32_t>& opaque, std::vector<uint32_t>& transparent)
     {
+        m_graphics.UpdateUbo(m_bonesUbo, m_boneMatrixBuffer.data(), m_boneMatrixBuffer.size() * sizeof(glm::mat4));
+        m_graphics.BindUbo(m_bonesUbo, 0);
+
         for (uint32_t objIndex : opaque)
         {
             auto& meshInfo = level.meshes[objIndex];
@@ -500,6 +552,7 @@ namespace TombForge
     {
         if (material.albedoTexture)
         {
+            // This is checked inside if so we can have a magenta fallback for missing textures
             const bool isValid = material.albedoTexture->gpuHandle.IsValid();
             m_graphics.SetTexture(m_skinnedLocations.albedoTexture, isValid ? material.albedoTexture->gpuHandle : m_magentaTexture.gpuHandle, 0);
         }
@@ -509,20 +562,18 @@ namespace TombForge
         }
         m_graphics.SetVec4(m_skinnedLocations.albedoColor, material.albedoColor);
 
-        if (material.normalTexture)
+        if (TextureValidOnGPU(material.normalTexture.get()))
         {
-            const bool isValid = material.normalTexture->gpuHandle.IsValid();
-            m_graphics.SetTexture(m_skinnedLocations.normalTexture, isValid ? material.normalTexture->gpuHandle : m_flatNormal.gpuHandle, 1);
+            m_graphics.SetTexture(m_skinnedLocations.normalTexture, material.normalTexture->gpuHandle, 1);
         }
         else
         {
             m_graphics.SetTexture(m_skinnedLocations.normalTexture, m_flatNormal.gpuHandle, 1);
         }
 
-        if (material.roughnessTexture)
+        if (TextureValidOnGPU(material.roughnessTexture.get()))
         {
-            const bool isValid = material.roughnessTexture->gpuHandle.IsValid();
-            m_graphics.SetTexture(m_skinnedLocations.roughnessTexture, isValid ? material.roughnessTexture->gpuHandle : m_singleChannelWhite.gpuHandle, 2);
+            m_graphics.SetTexture(m_skinnedLocations.roughnessTexture, material.roughnessTexture->gpuHandle, 2);
             m_graphics.SetFloat(m_skinnedLocations.roughnessValue, 1.0f); // Ignore roughness value if using texture
         }
         else
@@ -530,11 +581,11 @@ namespace TombForge
             m_graphics.SetTexture(m_skinnedLocations.roughnessTexture, m_singleChannelWhite.gpuHandle, 2);
             m_graphics.SetFloat(m_skinnedLocations.roughnessValue, material.roughnessValue);
         }
+        m_graphics.SetInt(m_skinnedLocations.roughnessChannel, static_cast<int>(material.roughnessChannel));
 
-        if (material.metalnessTexture)
+        if (TextureValidOnGPU(material.metalnessTexture.get()))
         {
-            const bool isValid = material.metalnessTexture->gpuHandle.IsValid();
-            m_graphics.SetTexture(m_skinnedLocations.metalnessTexture, isValid ? material.metalnessTexture->gpuHandle : m_singleChannelWhite.gpuHandle, 3);
+            m_graphics.SetTexture(m_skinnedLocations.metalnessTexture, material.metalnessTexture->gpuHandle, 3);
             m_graphics.SetFloat(m_skinnedLocations.metalnessValue, 1.0f); // Ignore metallic value if using texture
         }
         else
@@ -542,28 +593,48 @@ namespace TombForge
             m_graphics.SetTexture(m_skinnedLocations.metalnessTexture, m_singleChannelWhite.gpuHandle, 3);
             m_graphics.SetFloat(m_skinnedLocations.metalnessValue, material.metalnessValue);
         }
+        m_graphics.SetInt(m_skinnedLocations.metalnessChannel, static_cast<int>(material.metalnessChannel));
+
+        m_graphics.BindUbo(m_bonesUbo, 0);
     }
 
     void Renderer::InitializeMaterial(Material& material)
     {
-        if (material.albedoTexture && !material.albedoTexture->gpuHandle.IsValid())
+        if (ValidTextureNotOnGPU(material.albedoTexture.get()))
         {
             material.albedoTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.albedoTexture);
         }
-
-        if (material.normalTexture && !material.normalTexture->gpuHandle.IsValid())
+        if (ValidTextureNotOnGPU(material.normalTexture.get()))
         {
             material.normalTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.normalTexture);
         }
-
-        if (material.roughnessTexture && !material.roughnessTexture->gpuHandle.IsValid())
+        if (ValidTextureNotOnGPU(material.roughnessTexture.get()))
         {
             material.roughnessTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.roughnessTexture);
         }
-
-        if (material.metalnessTexture && !material.metalnessTexture->gpuHandle.IsValid())
+        if (ValidTextureNotOnGPU(material.metalnessTexture.get()))
         {
             material.metalnessTexture->gpuHandle = m_graphics.CreateTextureInstance(*material.metalnessTexture);
+        }
+    }
+
+    void Renderer::DestroyMaterial(Material& material)
+    {
+        if (TextureValidOnGPU(material.albedoTexture.get()))
+        {
+            m_graphics.DestroyTextureInstance(material.albedoTexture->gpuHandle);
+        }
+        if (TextureValidOnGPU(material.normalTexture.get()))
+        {
+            m_graphics.DestroyTextureInstance(material.normalTexture->gpuHandle);
+        }
+        if (TextureValidOnGPU(material.roughnessTexture.get()))
+        {
+            m_graphics.DestroyTextureInstance(material.roughnessTexture->gpuHandle);
+        }
+        if (TextureValidOnGPU(material.metalnessTexture.get()))
+        {
+            m_graphics.DestroyTextureInstance(material.metalnessTexture->gpuHandle);
         }
     }
 
@@ -574,48 +645,15 @@ namespace TombForge
         bool transparentPass,
         const std::vector<glm::mat4>* boneMatrices)
     {
+        if (boneMatrices)
+        {
+            m_graphics.UpdateUbo(m_bonesUbo, boneMatrices->data(), boneMatrices->size() * sizeof(glm::mat4));
+        }
+
         for (size_t m = 0; m < model.meshes.size(); m++)
         {
-            auto& mesh = model.meshes[m];
-
-            if (!mesh.isActive || !mesh.gpuHandle.IsValid())
-            {
-                continue;
-            }
-
-            m_graphics.SetMatrix4("model", transform.AsMatrix());
-
-            if (mesh.material)
-            {
-                const auto& material = mesh.material;
-
-                const bool isTransparent = material->TestFlag(MATERIAL_FLAG_TRANSPARENT);
-
-                const bool shouldDraw = (transparentPass && isTransparent) || (!transparentPass && !isTransparent);
-                if (!shouldDraw)
-                {
-                    continue;
-                }
-
-                SetMaterial(*mesh.material);
-            }
-
-            if (boneMatrices)
-            {
-                m_graphics.SetMatrix4Array("finalBonesMatrices", *boneMatrices);
-            }
-
-            if (mesh.isDoubleSided)
-            {
-                glDisable(GL_CULL_FACE);
-            }
-
-            DrawMesh(mesh, lightIndices, lightCount);
-
-            if (mesh.isDoubleSided)
-            {
-                glEnable(GL_CULL_FACE);
-            }
+            m_graphics.SetMatrix4(m_skinnedLocations.modelMatrix, transform.AsMatrix());
+            DrawMesh(model.meshes[m], lightIndices, lightCount, transparentPass);
         }
     }
 
@@ -645,69 +683,37 @@ namespace TombForge
         }
     }
 
-    void Renderer::DrawMesh(const Mesh& mesh, const MeshLightArray& lightIndices, uint8_t lightCount, const Material* overrideMaterial)
+    void Renderer::DrawMesh(const Mesh& mesh,
+        const MeshLightArray& lightIndices,
+        const uint8_t lightCount,
+        const bool isTransparentPass,
+        const Material* overrideMaterial)
     {
         if (!mesh.isActive || !mesh.gpuHandle.IsValid())
         {
             return;
         }
 
-        if (overrideMaterial)
+        const auto material = overrideMaterial ? overrideMaterial : mesh.material.get();
+        if (material)
         {
-            SetMaterial(*overrideMaterial);
-        }
-        else if (mesh.material)
-        {
-            SetMaterial(*mesh.material);
+            const bool isTransparent = material->TestFlag(MATERIAL_FLAG_TRANSPARENT);
+            const bool shouldDraw = (isTransparentPass && isTransparent) || (!isTransparentPass && !isTransparent);
+            if (!shouldDraw)
+            {
+                return;
+            }
+            SetMaterial(*material);
         }
 
-        for (size_t i = 0; i < lightIndices.size(); i++)
+        for (size_t i = 0; i < lightIndices.size() && i < MaxLightsPerMesh; i++)
         {
-            ShaderLocation location;
-            switch (i)
-            {
-            case 0:
-                location = m_skinnedLocations.lightIndices[0];
-                break;
-            case 1:
-                location = m_skinnedLocations.lightIndices[1];
-                break;
-            case 2:
-                location = m_skinnedLocations.lightIndices[2];
-                break;
-            case 3:
-                location = m_skinnedLocations.lightIndices[3];
-                break;
-            case 4:
-                location = m_skinnedLocations.lightIndices[4];
-                break;
-            case 5:
-                location = m_skinnedLocations.lightIndices[5];
-                break;
-            case 6:
-                location = m_skinnedLocations.lightIndices[6];
-                break;
-            case 7:
-                location = m_skinnedLocations.lightIndices[7];
-                break;
-            default:
-                break;
-            }
-            m_graphics.SetInt(location, lightIndices[i]);
+            m_graphics.SetInt(m_skinnedLocations.lightIndices[i], lightIndices[i]);
         }
         m_graphics.SetInt(m_skinnedLocations.numLights, lightCount);
 
-        if (mesh.isDoubleSided)
-        {
-            glDisable(GL_CULL_FACE);
-        }
-
+        m_graphics.SetFaceCulling(!mesh.isDoubleSided);
         m_graphics.DrawMesh(mesh.gpuHandle);
-
-        if (mesh.isDoubleSided)
-        {
-            glEnable(GL_CULL_FACE);
-        }
     }
 
     void Renderer::ExtractCameraPlanes(Frustum& result, const glm::mat4& viewProj) const

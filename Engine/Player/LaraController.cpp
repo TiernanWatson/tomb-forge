@@ -1,5 +1,8 @@
 #include "Engine/Player/LaraController.h"
 
+#include "Engine/Assets/AssetRegistry.h"
+#include "Engine/Audio/AudioSystem.h"
+#include "Engine/Levels/Level.h"
 #include "Engine/Physics/Physics.h"
 #include "Engine/Physics/PhysicsInterface.h"
 #include "Engine/Player/Lara.h"
@@ -10,12 +13,40 @@
 
 namespace TombForge
 {
-    LaraController::LaraController(Lara* lara, PhysicsInterface* physics, AssetRegistry* assets)
-        : m_lara{ lara }, m_physics{ physics }, m_assetRegistry{ assets }
+    namespace
+    {
+        void SetupSoundBuffers(AssetRegistry& reg, AudioSystem* audio, const std::vector<AssetId>& sounds, std::vector<uint16_t>& buffers)
+        {
+            buffers.clear();
+            buffers.reserve(sounds.size());
+            for (const auto& sound : sounds)
+            {
+                auto asset = reg.Load<Sound>(sound);
+                if (asset)
+                {
+                    buffers.emplace_back(audio->GenerateBuffer(asset));
+                }
+            }
+        }
+    }
+
+    LaraController::LaraController(Lara* lara, PhysicsInterface* physics, AssetRegistry* assets, AudioSystem* audio)
+        : m_lara{ lara }, m_physics{ physics }, m_assetRegistry{ assets }, m_audioSystem{ audio }
     {
         ASSERT(m_lara != nullptr, "Null Lara pointer provided to LaraController");
         ASSERT(m_physics != nullptr, "Null PhysicsInterface pointer provided to LaraController");
         ASSERT(m_assetRegistry != nullptr, "Null AssetRegistry pointer provided to LaraController");
+        ASSERT(m_audioSystem != nullptr, "Null AudioSystem pointer provided to LaraController");
+
+        m_lara->animPlayer.RegisterCallback([this](AnimEvent evt)
+            {
+                HandleAnimationEvent(evt);
+            });
+    }
+
+    LaraController::~LaraController()
+    {
+        m_lara->animPlayer.RegisterCallback(nullptr);
     }
 
     void LaraController::Initialize()
@@ -30,13 +61,26 @@ namespace TombForge
                 switch (i)
                 {
                 case LARA_STATE_LOCOMOTION:
-                    state = new LocomotionState();
+                    state = new LocomotionState(
+                        config.runSpeed,
+                        config.walkSpeed,
+                        config.turnRate,
+                        config.deadZone,
+                        config.walkThreshold);
                     break;
                 case LARA_STATE_AIR:
-                    state = new AirState();
+                    state = new AirState(
+                        config.ledgeReachOffset,
+                        config.jumpDistance,
+                        config.jumpHeight,
+                        config.gravity,
+                        config.safeFallDistance,
+                        config.deathFallDistance);
                     break;
                 case LARA_STATE_CLIMB:
-                    state = new ClimbState();
+                    state = new ClimbState(
+                        config.ledgeGrabOffset,
+                        config.ledgeHangOffset);
                     break;
                 default:
                     break;
@@ -51,6 +95,12 @@ namespace TombForge
             m_animSetEntries = config.animSetEntries;
             SetAnimationSet(m_animationSets[0]);
             m_states[m_stateIndex]->Begin(*this);
+
+            SetupSoundBuffers(*m_assetRegistry, m_audioSystem, config.feetSfx, m_feetSoundBuffers);
+            SetupSoundBuffers(*m_assetRegistry, m_audioSystem, config.jumpSfx, m_jumpSoundBuffers);
+            SetupSoundBuffers(*m_assetRegistry, m_audioSystem, config.climbupSfx, m_climbupSoundBuffers);
+            SetupSoundBuffers(*m_assetRegistry, m_audioSystem, config.swooshSfx, m_swooshSoundBuffers);
+            SetupSoundBuffers(*m_assetRegistry, m_audioSystem, config.handSfx, m_handSoundBuffers);
         }
     }
 
@@ -96,43 +146,21 @@ namespace TombForge
                 *physics.tmpAllocator);
 
             m_lara->transform.position = JphVec3ToGlm(character->GetPosition());
+            
             state->PostPhysicsUpdate(*this, deltaTime, *m_physics);
         }
     }
 
-    void LaraController::SetRootMotion(RootMotionMode mode)
+    std::shared_ptr<const Animation> LaraController::GetAnimation(const std::string& name) const
     {
-        m_lara->animPlayer.SetRootMotionMode(mode);
-    }
-
-    RootMotionMode LaraController::GetRootMotionMode() const
-    {
-        return m_lara->animPlayer.GetRootMotionMode();
-    }
-
-    const AnimPlayer& LaraController::GetAnimPlayer() const
-    {
-        return m_lara->animPlayer;
-    }
-
-    void LaraController::SetTargetVelocity(const glm::vec3& velocity)
-    {
-        m_lara->inputVelocity = velocity;
-    }
-
-    void LaraController::SetVelocity(const glm::vec3& velocity)
-    {
-        m_lara->actualVelocity = velocity;
-    }
-
-    void LaraController::SetRotation(const glm::quat& rotation)
-    {
-        m_lara->transform.rotation = rotation;
-    }
-
-    void LaraController::SetRotation(const glm::vec3& eulers)
-    {
-        m_lara->transform.SetEulers(eulers);
+        for (const auto& anim : m_animationSet->animations)
+        {
+            if (anim && anim->name == name)
+            {
+                return anim;
+            }
+        }
+        return nullptr;
     }
 
     void LaraController::SetPosition(const glm::vec3& position)
@@ -151,24 +179,15 @@ namespace TombForge
         m_physics->SetPlayerCollidesWorld(value);
     }
 
-    glm::vec3 LaraController::GetVelocity() const
+    void LaraController::LerpPosition(const glm::vec3& position, float alpha)
     {
-        return m_lara->actualVelocity;
+        m_lara->transform.position = glm::mix(m_lara->transform.position, position, alpha);
+        m_lara->physics->SetPosition(GlmVec3ToJph(m_lara->transform.position));
     }
 
-    glm::quat LaraController::GetRotation() const
+    void LaraController::SlerpRotation(const glm::quat& rotation, float alpha)
     {
-        return m_lara->transform.rotation;
-    }
-
-    glm::vec3 LaraController::GetPosition() const
-    {
-        return m_lara->transform.position;
-    }
-
-    glm::vec3 LaraController::GetForward() const
-    {
-        return m_lara->transform.ForwardVector();
+        m_lara->transform.rotation = glm::slerp(m_lara->transform.rotation, rotation, alpha);
     }
 
     bool LaraController::IsGrounded() const
@@ -186,9 +205,23 @@ namespace TombForge
         return m_lara->cameraPitch;
     }
 
+    glm::vec3 LaraController::GetNearestLedgePoint() const
+    {
+        auto& ledge = m_level->ledges[m_ledgeIndex];
+        glm::vec3 nextLedgePoint = m_level->ledges[ledge.nextLedge].point;
+        glm::vec3 ledgePoint = ledge.point;
+        glm::vec3 laraPosition = m_lara->transform.position;
+
+        glm::vec3 ledgeDir = nextLedgePoint - ledgePoint;
+        float t = glm::dot(laraPosition - ledgePoint, ledgeDir) / glm::dot(ledgeDir, ledgeDir);
+        t = glm::clamp(t, 0.0f, 1.0f);
+        return ledgePoint + t * ledgeDir;
+    }
+
     void LaraController::UpdateAnimation(float deltaTime)
     {
         auto& animSet = m_animationSet;
+
         for (const auto& t : animSet->transitions)
         {
             if (t.ContainsFromAnimation(m_animIndex))
@@ -212,14 +245,51 @@ namespace TombForge
                 {
                     if (t.shouldBlend)
                     {
-                        m_lara->animPlayer.BlendTo(animSet->animations[t.toAnimation], t.blendDuration, t.loop, t.targetFrame);
+                        m_lara->animPlayer.BlendTo(animSet->animations[t.toAnimation], t.blendDuration, t.loop, t.targetFrame, t.snapRoot, t.blendCurve);
                     }
                     else
                     {
                         m_lara->animPlayer.Play(animSet->animations[t.toAnimation], t.loop, t.targetFrame);
                     }
+
                     m_animIndex = t.toAnimation;
+                    m_states[m_stateIndex]->OnAnimationChange(*this, *animSet->animations[m_animIndex]);
+
                     break;
+                }
+            }
+        }
+
+        // Set the bone offsets that correct any bone position issues, e.g. hips not in right place
+        for (const auto& warp : animSet->boneWarps)
+        {
+            if (warp.animationIndex != m_animIndex)
+            {
+                continue;
+            }
+
+            float currentFrame = m_lara->animPlayer.GetCurrentFrame();
+            if (warp.endFrame > warp.startFrame)
+            {
+                float currentFrameAdjusted = std::max(currentFrame - warp.startFrame, 0.0f);
+                float warpLength = warp.endFrame - warp.startFrame;
+                float alpha = Maths::Clamp(currentFrameAdjusted / warpLength, 0.0f, 1.0f);
+                if (warp.reverse)
+                {
+                    alpha = 1.0f - alpha;
+                }
+
+                m_lara->animPlayer.SetBoneOffset(warp.boneId, alpha * warp.offset);
+            }
+            else
+            {
+                if (currentFrame > warp.startFrame)
+                {
+                    m_lara->animPlayer.SetBoneOffset(warp.boneId, warp.reverse ? glm::vec3(0.0f) : warp.offset);
+                }
+                else
+                {
+                    m_lara->animPlayer.SetBoneOffset(warp.boneId, warp.reverse ? warp.offset : glm::vec3(0.0f));
                 }
             }
         }
@@ -239,6 +309,7 @@ namespace TombForge
         float targetFrame = animSet->defaultTargetFrame;
         bool shouldBlend = animSet->defaultShouldBlend;
         bool shouldLoop = animSet->defaultShouldLoop;
+        bool shouldSnapRoot = animSet->defaultShouldSnapRoot;
 
         uint32_t targetAnim = animSet->defaultAnimation;
         for (const auto& entry : m_animSetEntries)
@@ -264,6 +335,7 @@ namespace TombForge
                     targetFrame = entry.transition.targetFrame;
                     shouldBlend = entry.transition.shouldBlend;
                     shouldLoop = entry.transition.loop;
+                    shouldSnapRoot = entry.transition.snapRoot;
                     break;
                 }
             }
@@ -275,12 +347,49 @@ namespace TombForge
         {
             if (shouldBlend)
             {
-                m_lara->animPlayer.BlendTo(animSet->animations[m_animIndex], blendTime, shouldLoop, targetFrame);
+                m_lara->animPlayer.BlendTo(animSet->animations[m_animIndex], blendTime, shouldLoop, targetFrame, shouldSnapRoot);
             }
             else
             {
                 m_lara->animPlayer.Play(animSet->animations[m_animIndex], shouldLoop, targetFrame);
             }
+        }
+
+        m_states[m_stateIndex]->OnAnimationChange(*this, *animSet->animations[m_animIndex]);
+    }
+
+    void LaraController::HandleAnimationEvent(AnimEvent evt)
+    {
+        float volume = 0.6f;
+        switch (evt)
+        {
+        case ANIM_EVENT_FOOT_SFX:
+        {
+            PlayRandomSound(m_feetSoundBuffers, volume);
+            break;
+        }
+        case ANIM_EVENT_JUMP_SFX:
+        {
+            PlayRandomSound(m_jumpSoundBuffers, volume);
+            break;
+        }
+        case ANIM_EVENT_CLIMBUP_SFX:
+        {
+            PlayRandomSound(m_climbupSoundBuffers, volume);
+            break;
+        }
+        case ANIM_EVENT_SWOOSH_SFX:
+        {
+            PlayRandomSound(m_swooshSoundBuffers, volume - 0.1f);
+            break;
+        }
+        case ANIM_EVENT_HAND_SFX:
+        {
+            PlayRandomSound(m_handSoundBuffers, volume);
+            break;
+        }
+        default:
+            break;
         }
     }
 
@@ -295,9 +404,9 @@ namespace TombForge
         case AnimationSet::Transition::Condition::Type::SpeedLess:
             return glm::length(m_lara->actualVelocity) < condition.threshold;
         case AnimationSet::Transition::Condition::Type::TargetSpeedGreater:
-            return glm::length(m_lara->inputVelocity) > condition.threshold;
+            return glm::length(m_lara->targetVelocity) > condition.threshold;
         case AnimationSet::Transition::Condition::Type::TargetSpeedLess:
-            return glm::length(m_lara->inputVelocity) < condition.threshold;
+            return glm::length(m_lara->targetVelocity) < condition.threshold;
         case AnimationSet::Transition::Condition::Type::OnGround:
             return IsGrounded();
         case AnimationSet::Transition::Condition::Type::OffGround:
@@ -306,9 +415,37 @@ namespace TombForge
             return m_wantsToJump;
         case AnimationSet::Transition::Condition::Type::TimeLeft:
             return m_lara->animPlayer.TimeLeft() <= condition.threshold;
+        case AnimationSet::Transition::Condition::Type::IsReaching:
+            if (m_states.size() > LARA_STATE_AIR && m_states[LARA_STATE_AIR])
+            {
+                auto* airState = static_cast<AirState*>(m_states[LARA_STATE_AIR].get());
+                return airState->IsReaching();
+            }
+            return false;
+        case AnimationSet::Transition::Condition::Type::ClimbUp:
+            if (m_states.size() > LARA_STATE_CLIMB && m_states[LARA_STATE_CLIMB])
+            {
+                auto* climbState = static_cast<ClimbState*>(m_states[LARA_STATE_CLIMB].get());
+                return climbState->IsClimbingUp();
+            }
+            return false;
         default:
             LOG_ERROR("Cannot evaluate unknown animation set transition condition");
             return false;
+        }
+    }
+
+    void LaraController::PlayRandomSound(const std::vector<uint16_t>& buffers, float volume)
+    {
+        if (buffers.size() > 0)
+        {
+            size_t soundIndex = rand() % buffers.size();
+            m_audioSystem->PlayBuffer(
+                buffers[soundIndex],
+                m_lara->transform.position.x,
+                m_lara->transform.position.y,
+                m_lara->transform.position.z,
+                volume);
         }
     }
 }

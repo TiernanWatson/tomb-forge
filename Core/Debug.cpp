@@ -35,7 +35,7 @@ namespace TombForge::Debug
             {
                 startIndex = 0;
             }
-            messages.emplace(messages.begin() + startIndex++, DbgMessage{ result, file, line, verbosity });
+            messages[startIndex++] = DbgMessage{ result, file, line, verbosity };
         }
         else
         {

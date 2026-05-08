@@ -14,13 +14,30 @@ out vec3 Normal;
 out vec3 FragPos;
 out vec2 TexCoords;
 
-const int MAX_BONES = 127;
+const int MAX_BONES = 255;
 const int MAX_BONE_INFLUENCE = 4;
 
 uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
-uniform mat4 finalBonesMatrices[MAX_BONES];
+
+layout(std140, binding = 0) uniform BonesBlock
+{
+	mat4 finalBonesMatrices[MAX_BONES];
+};
+
+// Shared UBO data for every frame. Must match the renderer struct.
+layout(std140, binding = 1) uniform PerFrameData
+{
+    mat4 view;
+    mat4 projection;
+    vec3 cameraPos;
+    float pad0;
+    vec3 ambientColor;
+    float ambientStrength;
+    vec3 dirLightColor;
+    float dirLightStrength;
+    vec3 dirLightDirection;
+    float pad1;
+};
 
 invariant gl_Position; // Keeps the position consistent if doing multiple render passes
 

@@ -30,14 +30,13 @@ namespace TombForge
 
             const JPH::Vec3 hitPoint = jphRay.GetPointOnRay(result.mFraction);
 
-            outResult.objectId = bodies.GetUserData(result.mBodyID);
+            outResult.userData = bodies.GetUserData(result.mBodyID);
             outResult.point = JphVec3ToGlm(hitPoint);
 
             JPH::BodyLockRead lock(m_physicsSystem->GetBodyLockInterface(), result.mBodyID);
             if (lock.Succeeded())
             {
                 const JPH::Body& body = lock.GetBody();
-
                 outResult.normal = JphVec3ToGlm(body.GetWorldSpaceSurfaceNormal(result.mSubShapeID2, hitPoint));
             }
 

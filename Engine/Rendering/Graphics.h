@@ -5,7 +5,9 @@
 #include <vector>
 
 #include <glad/glad.h>
-#include <glm/detail/type_mat.hpp>
+#include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
+#include <glm/mat4x4.hpp>
 
 #include "Core/Graphics/Line.h"
 
@@ -29,6 +31,7 @@ namespace TombForge
 
     using ShaderHandle = GenericHandle;
     using LocationHandle = GenericHandle;
+    using UboHandle = GenericHandle;
 
     struct MeshHandle
     {
@@ -96,6 +99,7 @@ namespace TombForge
         // Texture Functions
 
         TextureHandle CreateTextureInstance(const Texture& texture);
+        void DestroyTextureInstance(TextureHandle& handle);
 
         // Shader Functions
 
@@ -127,6 +131,13 @@ namespace TombForge
         void SetTexture(ShaderLocation location, const TextureHandle handle);
         void SetTexture(ShaderLocation location, const TextureHandle handle, int unit);
 
+        // UBO Functions
+
+        UboHandle CreateUbo();
+        void UpdateUbo(UboHandle& handle, const void* data, size_t size);
+        void BindUbo(const UboHandle& handle, GLuint bindingPoint);
+        void DestroyUbo(UboHandle& handle);
+
         // Buffer and pipeline
 
         void ResizeFramebuffer(int width, int height);
@@ -137,6 +148,7 @@ namespace TombForge
         void SetDepthWriteStatus(bool value);
         void SetColorWriteStatus(bool value);
         void SetDepthFunc(DepthFunc func);
+        void SetFaceCulling(bool enabled);
 
         // Shaders
 
@@ -160,6 +172,7 @@ namespace TombForge
         std::vector<MeshInstance> m_meshes{};
         std::vector<GLuint> m_shaders{};
         std::vector<GLuint> m_textures{};
+        std::vector<GLuint> m_ubos{};
 
         GLuint m_activeShader{};
     };

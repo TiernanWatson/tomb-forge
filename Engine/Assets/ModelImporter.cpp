@@ -140,6 +140,13 @@ namespace TombForge
             {
                 const aiBone* bone = mesh->mBones[b];
 
+                const std::string boneName = bone->mName.C_Str();
+                if (boneName.find("DEF_") != std::string::npos ||
+                    boneName.find("MCH_") != std::string::npos)
+                {
+                    continue; // Ignore these bones
+                }
+
                 if (output.contains(bone->mName.C_Str()))
                 {
                     continue;
@@ -411,6 +418,7 @@ namespace TombForge
                 auto& vertex = outMesh.vertices.emplace_back();
 
                 vertex.position = { mesh->mVertices[v].x, mesh->mVertices[v].y, mesh->mVertices[v].z };
+                vertex.position = glm::vec3(recursiveTransform * glm::vec4(vertex.position, 1.0f));
                 vertex.position *= settings.scale; // Do this separate from transform as we don't want to scale normals
 
                 if (mesh->HasNormals())
@@ -623,6 +631,7 @@ namespace TombForge
         const aiScene* scene = importer.GetScene();
 
         const std::string basePath = m_path.substr(0, m_path.find_last_of("\\/") + 1);
+        const std::string fileName = FileIO::GetFileName(m_path, false);
 
         ImportResult result{};
 
@@ -631,13 +640,21 @@ namespace TombForge
             // First find all the nodes that are actually bones with info
             std::unordered_map<std::string, BoneInfo> allBonesSet;
             FindAllBones(scene, scene->mRootNode, settings, allBonesSet);
+            if (allBonesSet.empty())
+            {
+                LOG_ERROR("No bones found in model despite trying to import a skeleton");
+            }
+            if (allBonesSet.size() > UINT8_MAX)
+            {
+                LOG_ERROR("Model has %zu bones which is too many to fit in uint8_t", allBonesSet.size());
+            }
 
             // Find skeleton root node
             const aiNode* rootNode = FindAssimpBoneRootNode(scene->mRootNode, allBonesSet);
 
             // Then fill out the skeleton in a sorted order
             result.skeleton = std::make_shared<Skeleton>();
-            result.skeleton->name = settings.skeletonPath;
+            result.skeleton->name = fileName;
 
             ProcessSkeleton(rootNode, result.skeleton->bones, allBonesSet, settings);
         }
@@ -647,7 +664,7 @@ namespace TombForge
             const std::string baseName = GetFilePathWithoutExtension(settings.modelPath);
 
             result.model = std::make_shared<Model>();
-            result.model->name = settings.modelPath;
+            result.model->name = fileName;
             result.model->skeleton = result.skeleton;
 
             glm::mat4 transformMatrix{ 1.0f };
@@ -662,7 +679,7 @@ namespace TombForge
             if (skeleton)
             {
                 result.animation = std::make_shared<Animation>();
-                result.animation->name = settings.animationPath;
+                result.animation->name = fileName;
 
                 ProcessAnimation(scene, *skeleton, settings, *result.animation);
             }

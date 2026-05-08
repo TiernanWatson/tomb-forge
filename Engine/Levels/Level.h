@@ -30,15 +30,13 @@ namespace TombForge
     static constexpr int MaxLightsPerMesh{ 8 };
 
     using MeshLightArray = std::array<uint32_t, MaxLightsPerMesh>;
-    using ColliderId = uint32_t;
-    using ModelId = uint32_t;
-    using MeshId = uint32_t;
 
-    enum ColliderType : uint8_t
+    enum ColliderType : uint32_t
     {
         COLLIDER_NONE,
         COLLIDER_BOX,
-        COLLIDER_MESH
+        COLLIDER_MESH,
+        COLLIDER_LEDGE,
     };
 
     struct Camera
@@ -87,18 +85,29 @@ namespace TombForge
         uint32_t mesh{}; // Index into collision mesh array
     };
 
-    struct Collision
+    struct ColliderHandle
     {
-        ColliderType type{}; // Which array to look at
-        ColliderId id{}; // Index into specific array
+        union
+        {
+            struct
+            {
+                ColliderType bodyType; // Is this a mesh, box, ledge, etc
+                uint32_t index; // Index into that array
+            };
+            uint64_t data{}; // Jolt user data
+        };
+
+        ColliderHandle() = default;
+        ColliderHandle(uint64_t data) : data{ data } {}
+        ColliderHandle(ColliderType type, uint32_t index) : bodyType{ type }, index{ index } {}
     };
 
     struct LedgePoint
     {
-        glm::vec3 point{};
-        glm::vec3 direction{};
+        glm::vec3 point{}; // World-space position of the ledge
+        glm::vec3 direction{}; // Direction Lara would face when hanging
         JPH::BodyID bodyId{};
-        uint32_t nextLedge{};
+        uint32_t nextLedge{}; // Index into ledge array
     };
 
     struct MeshInstance
@@ -111,7 +120,7 @@ namespace TombForge
         uint32_t model{}; // Index into model array
         uint32_t mesh{}; // Index into model's mesh array
         AABB bounds{}; // World-space, only updated if moved
-        Collision collision{};
+        ColliderHandle collision{};
         uint8_t lightCount{};
     };
 
@@ -158,5 +167,4 @@ namespace TombForge
     AABB CalculateLevelBounds(const Level& level);
     void GetClosestLights(const Level& level, const glm::vec3& position, MeshLightArray& result, uint8_t& lightCount);
     void UpdateAllClosestLights(Level& level);
-    void InitializeCollider(MeshInstance& mesh, const glm::vec3& extents);
 }

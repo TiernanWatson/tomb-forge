@@ -13,11 +13,8 @@ namespace TombForge
     struct Bone
     {
         std::string name{}; // Human-friendly name
-
         glm::mat4 offset{}; // Transforms model space vertices to bone space
-
         glm::mat4 transform{}; // Transform of the bone relative to parent (in bind pose)
-
         uint8_t parent{}; // Parent index in bones array
     };
 

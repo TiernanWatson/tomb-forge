@@ -4,12 +4,23 @@
 #include <glm/vec3.hpp>
 
 #if EDITOR_ENABLED
+
 #include "Engine/Rendering/JoltDebugRenderer.h"
-#define DEBUG_RAY(physInterface, ray, color) physInterface.DebugRenderer()->DrawColoredLine(ray.origin, ray.origin + ray.direction, color)
-#define DEBUG_RAY(physInterface, ray) physInterface.DebugRenderer()->DrawColoredLine(ray.origin, ray.origin + ray.direction, glm::vec4{1.0f, 0.0f, 0.0f, 1.0f})
+#define DEBUG_RAY_COLOR(physInterface, ray, color) \
+    physInterface.DebugRenderer()->DrawColoredLine(ray.origin, ray.origin + ray.direction, color)
+
+#define DEBUG_RAY_TIMED(physInterface, ray, color, timeA) \
+    physInterface.DebugRenderer()->DrawColoredLine((ray).origin, ((ray).origin + (ray).direction), (color), (timeA))
+
+#define DEBUG_RAY(physInterface, ray) \
+    physInterface.DebugRenderer()->DrawColoredLine(ray.origin, ray.origin + ray.direction, glm::vec4{ 1.0f, 0.0f, 0.0f, 1.0f })
+
 #else
-#define DEBUG_RAY(physInterface, ray, color)
+
+#define DEBUG_RAY_TIMED(physInterface, ray, color, time)
+#define DEBUG_RAY_COLOR(physInterface, ray, color)
 #define DEBUG_RAY(physInterface, ray)
+
 #endif
 
 namespace JPH
@@ -29,7 +40,7 @@ namespace TombForge
     {
         glm::vec3 point{}; // Point exactly that was hit
         glm::vec3 normal{}; // Surface normal from hit
-        uint32_t objectId{}; // Object ID in level array
+        uint64_t userData{}; // Usually ColliderHandle from Level
     };
 
     struct Ray
@@ -49,6 +60,7 @@ namespace TombForge
         PHYSICS_LAYER_COUNT = 5
     };
 
+    // Abstracts away complex physics code for higher-level gameplay code
     class PhysicsInterface
     {
     public:

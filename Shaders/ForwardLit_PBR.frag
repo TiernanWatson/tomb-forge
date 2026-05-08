@@ -25,7 +25,6 @@ struct PointLight
     float strength;
 };
 
-// todo: implement UBO for these
 struct Material
 {
     vec4 albedoColor;
@@ -35,13 +34,26 @@ struct Material
 
 const float PI = 3.14159265359;
 
-uniform DirLight dirLight;
 uniform Material material;
-uniform vec3 cameraPosition;
 uniform int lightIndices[MAX_NUMBER_OF_LIGHT_INDICES];
 uniform int numLights; // Specific to the mesh being rendered
-uniform vec3 ambientColor;
-uniform float ambientStrength;
+uniform int metalnessChannel; // 0 = R, 1 = G, 2 = B, 3 = A
+uniform int roughnessChannel; // 0 = R, 1 = G, 2 = B, 3 = A
+
+// Shared UBO data for every frame. Must match the renderer struct.
+layout(std140, binding = 1) uniform PerFrameData
+{
+    mat4 view;
+    mat4 projection;
+    vec3 cameraPos;
+    float pad0;
+    vec3 ambientColor;
+    float ambientStrength;
+    vec3 dirLightColor;
+    float dirLightStrength;
+    vec3 dirLightDirection;
+    float pad1;
+};
 
 layout(binding = 0) uniform sampler2D diffuseTexture;
 layout(binding = 1) uniform sampler2D normalTexture;
@@ -152,12 +164,17 @@ void main()
     vec3 normal = texture(normalTexture, TexCoords).rgb;
     normal = normal * 2.0 - 1.0;   
     normal = normalize(TBN * normal);
-    float roughness = texture(roughnessTexture, TexCoords).r * material.roughnessValue;
+    float roughness = texture(roughnessTexture, TexCoords)[roughnessChannel] * material.roughnessValue;
     roughness = clamp(roughness, 0.05, 1.0);
-    float metalness = texture(metalnessTexture, TexCoords).r * material.metalnessValue;
+    float metalness = texture(metalnessTexture, TexCoords)[metalnessChannel] * material.metalnessValue;
 
-    vec3 view = normalize(cameraPosition - FragPos);
+    vec3 view = normalize(cameraPos - FragPos);
     vec3 F0 = mix(vec3(0.04), albedo, metalness);
+
+    DirLight dirLight;
+    dirLight.color = dirLightColor;
+    dirLight.direction = dirLightDirection;
+    dirLight.strength = dirLightStrength;
 
     vec3 lights = vec3(0.0, 0.0, 0.0);
     for (int i = 0; i < numLights; i++)

@@ -16,6 +16,15 @@ namespace TombForge
         MATERIAL_FLAG_TRANSPARENT = 1 << 0,
     };
 
+    // Which channel of a texture to use for a specific purpose
+    enum TextureChannel : uint8_t
+    {
+        TEXTURE_CHANNEL_R,
+        TEXTURE_CHANNEL_G,
+        TEXTURE_CHANNEL_B,
+        TEXTURE_CHANNEL_A,
+    };
+
     struct Material : public AssetBase
     {
         static const glm::vec4 DefaultAlbedoColor;
@@ -33,6 +42,9 @@ namespace TombForge
 
         ShaderHandle shader{};
         MaterialFlags flags{};
+
+        TextureChannel roughnessChannel{ TEXTURE_CHANNEL_R }; // Which channel of the roughness texture to use
+        TextureChannel metalnessChannel{ TEXTURE_CHANNEL_R }; // Which channel of the metalness texture to use
 
         bool TestFlag(MaterialFlags flag) const;
         void AddFlag(MaterialFlags flag);

@@ -342,6 +342,17 @@ namespace TombForge
         return TextureHandle{ static_cast<uint32_t>(arrayIndex) };
     }
 
+    void Graphics::DestroyTextureInstance(TextureHandle& handle)
+    {
+        if (!handle.IsValid())
+        {
+            return;
+        }
+        GLuint textureId = m_textures[handle.index];
+        glDeleteTextures(1, &textureId);
+        handle.index = TextureHandle::InvalidTextureIndex;
+    }
+
     bool Graphics::CompileShader(const std::string& vertexSource, const std::string& fragmentSource, unsigned int& outProgramId)
     {
         unsigned int vertexShader; 
@@ -494,6 +505,35 @@ namespace TombForge
         LoopGLErrors();
     }
 
+    UboHandle Graphics::CreateUbo()
+    {
+        GLuint uboId{};
+        glGenBuffers(1, &uboId);
+        m_ubos.emplace_back(uboId);
+        return UboHandle{ static_cast<uint16_t>(m_ubos.size() - 1), 0 };
+    }
+
+    void Graphics::UpdateUbo(UboHandle& handle, const void* data, size_t size)
+    {
+        glBindBuffer(GL_UNIFORM_BUFFER, m_ubos[handle.index]);
+        glBufferData(GL_UNIFORM_BUFFER, size, data, GL_DYNAMIC_DRAW);
+    }
+
+    void Graphics::BindUbo(const UboHandle& handle, GLuint bindingPoint)
+    {
+        glBindBufferBase(GL_UNIFORM_BUFFER, bindingPoint, m_ubos[handle.index]);
+    }
+
+    void Graphics::DestroyUbo(UboHandle& handle)
+    {
+        if (!handle.IsInitialized())
+        {
+            return;
+        }
+        glDeleteBuffers(1, &m_ubos[handle.index]);
+        handle.index = UINT16_MAX;
+    }
+
     void Graphics::ResizeFramebuffer(int width, int height)
     {
         glViewport(0, 0, width, height);
@@ -545,6 +585,19 @@ namespace TombForge
         default:
             LOG_ERROR("Unsupported depth func %i", func);
             break;
+        }
+        LoopGLErrors();
+    }
+
+    void Graphics::SetFaceCulling(bool enabled)
+    {
+        if (enabled)
+        {
+            glEnable(GL_CULL_FACE);
+        }
+        else
+        {
+            glDisable(GL_CULL_FACE);
         }
         LoopGLErrors();
     }

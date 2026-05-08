@@ -15,8 +15,21 @@ out vec3 FragPos;
 out vec2 TexCoords;
 
 uniform mat4 model;
-uniform mat4 view;
-uniform mat4 projection;
+
+// Shared UBO data for every frame. Must match the renderer struct.
+layout(std140, binding = 1) uniform PerFrameData
+{
+    mat4 view;
+    mat4 projection;
+    vec3 cameraPos;
+    float pad0;
+    vec3 ambientColor;
+    float ambientStrength;
+    vec3 dirLightColor;
+    float dirLightStrength;
+    vec3 dirLightDirection;
+    float pad1;
+};
 
 void main()
 {

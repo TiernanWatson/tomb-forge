@@ -40,8 +40,10 @@ namespace TombForge
         std::shared_ptr<Level> level{};
 
         Lara lara{};
-        LaraController laraController{ &lara, &physicsInterface, &assetRegistry };
+        LaraController laraController{ &lara, &physicsInterface, &assetRegistry, &audioSystem };
         Camera camera{};
+
+        glm::vec3 cameraAnchor{};
 
         double previousTime{};
 
@@ -81,8 +83,7 @@ namespace TombForge
 
     void SetLaraModel(EngineContext& ctx, const AssetId modelId);
 
-    void SetAndInitColliders(EngineContext& ctx, std::vector<BoxCollider>&& colliders);
-    void SetAndInitColliders(EngineContext& ctx, std::vector<MeshCollider>&& colliders);
-
     void SetMouseVisible(GLFWwindow* window, bool visible);
+
+    void UpdateLedge(EngineContext& ctx, size_t index, size_t nextLedge, const glm::vec3& point);
 }

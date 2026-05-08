@@ -11,7 +11,8 @@ namespace TombForge
         static constexpr JPH::BroadPhaseLayer NonMoving{ 0 };
         static constexpr JPH::BroadPhaseLayer Moving{ 1 };
         static constexpr JPH::BroadPhaseLayer Character{ 2 };
-        static constexpr JPH::uint NumLayers{ 3 };
+        static constexpr JPH::BroadPhaseLayer Trigger{ 3 };
+        static constexpr JPH::uint NumLayers{ 4 };
     };
 
     namespace ObjectLayers
@@ -19,7 +20,8 @@ namespace TombForge
         static constexpr JPH::ObjectLayer NonMoving{ 0 };
         static constexpr JPH::ObjectLayer Moving{ 1 };
         static constexpr JPH::ObjectLayer Character{ 2 };
-        static constexpr JPH::ObjectLayer NumLayers{ 3 };
+        static constexpr JPH::ObjectLayer Trigger{ 3 };
+        static constexpr JPH::ObjectLayer NumLayers{ 4 };
     };
 
     class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface
@@ -30,6 +32,7 @@ namespace TombForge
             m_objectToBroadPhase[ObjectLayers::NonMoving] = BroadPhaseLayers::NonMoving;
             m_objectToBroadPhase[ObjectLayers::Moving] = BroadPhaseLayers::Moving;
             m_objectToBroadPhase[ObjectLayers::Character] = BroadPhaseLayers::Character;
+            m_objectToBroadPhase[ObjectLayers::Trigger] = BroadPhaseLayers::Trigger;
         }
 
         inline virtual JPH::uint GetNumBroadPhaseLayers() const override
@@ -54,6 +57,8 @@ namespace TombForge
                 return "MOVING";
             case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::Character:
                 return "CHARACTER";
+            case (JPH::BroadPhaseLayer::Type)BroadPhaseLayers::Trigger:
+                return "TRIGGER";
             default:
             {
                 JPH_ASSERT(false);
@@ -77,9 +82,11 @@ namespace TombForge
             case ObjectLayers::NonMoving:
                 return inLayer2 == BroadPhaseLayers::Moving;
             case ObjectLayers::Character:
-                return m_playerCollidesWithWorld;
+                return inLayer2 == BroadPhaseLayers::Character;
             case ObjectLayers::Moving:
-                return m_playerCollidesWithWorld || inLayer2 != BroadPhaseLayers::Character;
+                return m_playerCollidesWithWorld && inLayer2 != BroadPhaseLayers::Character;
+            case ObjectLayers::Trigger:
+                return inLayer2 != BroadPhaseLayers::Character; // Triggers don't collide with the player
             default:
             {
                 JPH_ASSERT(false);
@@ -107,9 +114,11 @@ namespace TombForge
             case ObjectLayers::NonMoving:
                 return inObject2 == ObjectLayers::Moving;
             case ObjectLayers::Character:
-                return m_playerCollidesWithWorld;
+                return inObject2 == ObjectLayers::Character;
             case ObjectLayers::Moving:
-                return m_playerCollidesWithWorld || inObject2 != ObjectLayers::Character;
+                return m_playerCollidesWithWorld && inObject2 != ObjectLayers::Character;
+            case ObjectLayers::Trigger:
+                return inObject2 != ObjectLayers::Character; // Triggers don't collide with the player
             default:
             {
                 JPH_ASSERT(false);

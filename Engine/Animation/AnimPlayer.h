@@ -28,7 +28,13 @@ namespace TombForge
     {
     public:
         void Play(std::shared_ptr<const Animation> animation, bool loop = false, float targetFrame = 0.0f);
-        void BlendTo(std::shared_ptr<const Animation> animation, float frames, bool loop = false, float targetFrame = 0.0f);
+        void BlendTo(
+            std::shared_ptr<const Animation> animation,
+            float frames,
+            bool loop = false,
+            float targetFrame = 0.0f,
+            bool snapRoot = false,
+            BlendCurve curve = BlendCurve::Linear);
         void Process(float deltaTime);
 
         void SetSkeleton(std::shared_ptr<const Skeleton> skeleton);
@@ -42,6 +48,27 @@ namespace TombForge
         float CurrentTime() const { return m_currentAnim.currentFrame; }
         void ShouldLoop(bool value) { m_currentAnim.isLooping = value; }
 
+        void RegisterCallback(std::function<void(AnimEvent)> callback)
+        {
+            m_eventCallback = callback;
+        }
+
+        inline void SetBoneOffset(uint8_t boneId, const glm::vec3& offset)
+        {
+            ASSERT(boneId < m_bonesOffsets.size(), "Bone ID is out of range");
+            m_bonesOffsets[boneId] = offset;
+        }
+
+        inline void ResetBoneOffsets()
+        {
+            for (size_t b = 0; b < m_bonesOffsets.size(); b++)
+            {
+                m_bonesOffsets[b] = {};
+            }
+        }
+
+        std::shared_ptr<const Skeleton> GetSkeleton() const { return m_skeleton; }
+
         bool IsAnimation(const std::string& name) const
         {
             return m_currentAnim.clip && m_currentAnim.clip->name == name;
@@ -54,6 +81,20 @@ namespace TombForge
                 return 0.0f;
             }
             return m_currentAnim.clip->length - m_currentAnim.currentFrame;
+        }
+
+        float GetCurrentFrame() const
+        {
+            return m_currentAnim.currentFrame;
+        }
+
+        float GetLength() const
+        {
+            if (!m_currentAnim.clip)
+            {
+                return 0.0f;
+            }
+            return m_currentAnim.clip->length;
         }
 
         bool IsValid() const
@@ -84,7 +125,7 @@ namespace TombForge
         glm::vec3 GetScale(const std::vector<ScaleKey>& scales, float frame, glm::vec3 fallback) const;
         glm::quat GetRotation(const std::vector<RotationKey>& rotations, float frame, glm::quat fallback) const;
 
-        void TriggerEvents(const std::vector<EventKey>& events, float frame);
+        void TriggerEvents(const std::vector<EventKey>& events, float frame, float previousFrame);
 
         std::shared_ptr<const Skeleton> m_skeleton{};
         std::vector<glm::mat4> m_finalMatrices{};
@@ -95,6 +136,8 @@ namespace TombForge
         std::vector<glm::vec3> m_defaultPositions{};
         std::vector<glm::quat> m_defaultRotations{};
         std::vector<glm::vec3> m_defaultScales{};
+        std::vector<glm::vec3> m_bonesOffsets{}; // Added just before final matrix is computed
+        std::vector<glm::vec3> m_prevBonesOffsets{}; // Offsets from the previous animation
 
         AnimationState m_currentAnim{};
         AnimationState m_previousAnim{}; // For blending
@@ -103,15 +146,17 @@ namespace TombForge
         glm::quat m_rootRotDelta{};
 
         std::function<void(AnimEvent)> m_eventCallback{};
-        size_t m_lastEvent{};
+        size_t m_nextEvent{};
 
         float m_blendStart{}; // Frame the blend starts from on current animation
         float m_blendTime{}; // Total number of frames to blend over
 
         RootMotionMode m_rootMotionMode{ RootMotionMode::PositionOnly };
+        BlendCurve m_blendCurve{ BlendCurve::Linear };
 
         bool m_isBlending{};
         bool m_wasInterrupted{};
+        bool m_snapRoot{};
     };
 }
 

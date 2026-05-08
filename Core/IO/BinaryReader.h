@@ -34,6 +34,21 @@ namespace TombForge
         double ReadDouble() { return ReadLE<double>(); }
         bool ReadBool() { return ReadUInt8() != 0; }
 
+        template<typename T>
+        void ReadArray(T* outArray, size_t count)
+        {
+            m_stream.read(reinterpret_cast<char*>(outArray), sizeof(T) * count);
+            if (!m_stream.good())
+            {
+                LOG_ERROR("Failed to read array of size %zu", count);
+                return;
+            }
+            for (size_t i = 0; i < count; i++)
+            {
+                outArray[i] = FromLittleEndian(outArray[i]);
+            }
+        }
+
         std::string ReadString()
         {
             const uint32_t size = ReadUInt32();
