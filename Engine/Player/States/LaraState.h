@@ -1,7 +1,8 @@
 #pragma once
 
-//#include <glad/glad.h>
-//#include <glfw3.h>
+// Included for input in states
+#include <glad/glad.h>
+#include <glfw3.h>
 
 #include "Engine/Player/LaraEnums.h"
 
