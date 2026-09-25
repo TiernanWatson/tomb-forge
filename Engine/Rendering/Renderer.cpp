@@ -78,10 +78,14 @@ namespace TombForge
 
     void Renderer::Initialize(int width, int height)
     {
+        m_windowWidth = width;
+        m_windowHeight = height;
+
         m_graphics.Initialize(width, height);
 
         InitializeShaders();
         InitializeDefaultTextures();
+        InitializeShadowMap();
 
         m_bonesUbo = m_graphics.CreateUbo();
         m_perFrameUbo = m_graphics.CreateUbo();
@@ -115,6 +119,11 @@ namespace TombForge
         if (m_singleChannelWhite.gpuHandle.IsValid())
         {
             m_graphics.DestroyTextureInstance(m_singleChannelWhite.gpuHandle);
+        }
+
+        if (m_shadowFramebuffer.IsValid())
+        {
+            m_graphics.DestroyFramebuffer(m_shadowFramebuffer);
         }
     }
 
@@ -197,6 +206,13 @@ namespace TombForge
 
     void Renderer::RenderLevel(const Level& level, const Lara& lara, const Camera& camera)
     {
+        // Shadow pass: render the scene from the directional light's perspective to create a shadow map
+        m_lightSpaceMatrix = ComputeLightSpaceMatrix(level);
+        RenderShadowPass(level);
+
+        // Restore the default framebuffer after the shadow pass
+        m_graphics.BindFramebuffer(FramebufferHandle{}, m_windowWidth, m_windowHeight);
+
         m_graphics.UseShader(m_skinnedShader->GetHandle());
 
         m_viewMatrix = glm::inverse(camera.transform.AsMatrix());
@@ -219,6 +235,9 @@ namespace TombForge
         {
             m_graphics.SetTexture(m_skinnedLocations.lights, m_lightsTexture.gpuHandle, 4);
         }
+
+        m_graphics.SetMatrix4(m_skinnedLocations.lightSpaceMatrix, m_lightSpaceMatrix);
+        m_graphics.SetTexture(m_skinnedLocations.shadowMap, m_graphics.GetFramebufferDepthTexture(m_shadowFramebuffer), 5);
 
         Frustum cameraPlanes{};
         ExtractCameraPlanes(cameraPlanes, m_projectionMatrix * m_viewMatrix);
@@ -259,6 +278,8 @@ namespace TombForge
 
     void Renderer::OnWindowResized(int width, int height)
     {
+        m_windowWidth = width;
+        m_windowHeight = height;
         m_graphics.ResizeFramebuffer(width, height);
     }
 
@@ -393,7 +414,9 @@ namespace TombForge
             "lightIndices[5]",
             "lightIndices[6]",
             "lightIndices[7]",
-            "model"
+            "model",
+            "shadowMap",
+            "lightSpaceMatrix"
             });
 
         m_skinnedLocations.albedoTexture = m_skinnedShader->GetLocation("diffuseTexture");
@@ -419,6 +442,16 @@ namespace TombForge
         m_skinnedLocations.lightIndices[7] = m_skinnedShader->GetLocation("lightIndices[7]");
 
         m_skinnedLocations.modelMatrix = m_skinnedShader->GetLocation("model");
+
+        m_skinnedLocations.shadowMap = m_skinnedShader->GetLocation("shadowMap");
+        m_skinnedLocations.lightSpaceMatrix = m_skinnedShader->GetLocation("lightSpaceMatrix");
+
+        m_depthShader->CacheLocations({
+            "model",
+            "lightSpaceMatrix"
+            });
+        m_depthLocations.modelMatrix = m_depthShader->GetLocation("model");
+        m_depthLocations.lightSpaceMatrix = m_depthShader->GetLocation("lightSpaceMatrix");
     }
 
     void Renderer::InitializeDefaultTextures()
@@ -459,6 +492,11 @@ namespace TombForge
         m_singleChannelWhite.sRGB = false;
         m_singleChannelWhite.filter = TextureFilter::Nearest;
         m_singleChannelWhite.gpuHandle = m_graphics.CreateTextureInstance(m_singleChannelWhite);
+    }
+
+    void Renderer::InitializeShadowMap()
+    {
+        m_shadowFramebuffer = m_graphics.CreateDepthFramebuffer(ShadowMapResolution, ShadowMapResolution);
     }
 
     void Renderer::SubmitLightsTexture(const std::vector<PointLight>& lights)
@@ -546,6 +584,84 @@ namespace TombForge
             m_graphics.SetMatrix4(m_skinnedLocations.modelMatrix, level.meshes[objIndex].modelMatrix);
             DrawMesh(mesh, meshInfo.lights, meshInfo.lightCount, meshInfo.overrideMaterial ? meshInfo.overrideMaterial.get() : nullptr);
         }
+    }
+
+    glm::mat4 Renderer::ComputeLightSpaceMatrix(const Level& level) const
+    {
+        AABB sceneBounds{};
+        if (m_octTree.nodes.size() > 0)
+        {
+            sceneBounds = m_octTree.nodes[0].bounds;
+        }
+
+        const glm::vec3 center = (sceneBounds.min + sceneBounds.max) * 0.5f;
+        const glm::vec3 extents = (sceneBounds.max - sceneBounds.min) * 0.5f;
+        const float radius = glm::length(extents) + 1.0f; // Small padding to avoid clipping at edges
+
+        glm::vec3 lightDir = glm::normalize(level.directionalLight.dir);
+        if (glm::length(lightDir) < 0.0001f)
+        {
+            lightDir = glm::vec3(0.0f, -1.0f, 0.0f);
+        }
+
+        const glm::vec3 lightPos = center - lightDir * radius * 2.0f;
+
+        glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
+        if (glm::abs(glm::dot(up, lightDir)) > 0.99f)
+        {
+            up = glm::vec3(1.0f, 0.0f, 0.0f);
+        }
+
+        const glm::mat4 lightView = glm::lookAt(lightPos, center, up);
+        const glm::mat4 lightProjection = glm::ortho(-radius, radius, -radius, radius, 0.01f, radius * 4.0f);
+
+        return lightProjection * lightView;
+    }
+
+    void Renderer::RenderShadowPass(const Level& level)
+    {
+        if (!m_shadowFramebuffer.IsValid())
+        {
+            return;
+        }
+
+        m_graphics.BindFramebuffer(m_shadowFramebuffer, ShadowMapResolution, ShadowMapResolution);
+        m_graphics.ClearDepthBuffer();
+
+        m_graphics.UseShader(m_depthShader->GetHandle());
+        m_graphics.SetMatrix4(m_depthLocations.lightSpaceMatrix, m_lightSpaceMatrix);
+
+        // Help stop shadow acne by culling front faces
+        m_graphics.SetFaceCulling(true);
+        m_graphics.SetFaceCullingMode(FaceCulling::Front);
+
+        m_graphics.UpdateUbo(m_bonesUbo, m_boneMatrixBuffer.data(), m_boneMatrixBuffer.size() * sizeof(glm::mat4));
+        m_graphics.BindUbo(m_bonesUbo, 0);
+
+        for (const auto& meshInfo : level.meshes)
+        {
+            if (meshInfo.model >= level.models.size() || meshInfo.mesh >= level.models[meshInfo.model]->meshes.size())
+            {
+                continue;
+            }
+
+            const auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
+            if (!mesh.isActive || !mesh.gpuHandle.IsValid())
+            {
+                continue;
+            }
+
+            const auto material = meshInfo.overrideMaterial ? meshInfo.overrideMaterial.get() : mesh.material.get();
+            if (material && material->TestFlag(MATERIAL_FLAG_TRANSPARENT))
+            {
+                continue;
+            }
+
+            m_graphics.SetMatrix4(m_depthLocations.modelMatrix, meshInfo.modelMatrix);
+            m_graphics.DrawMesh(mesh.gpuHandle);
+        }
+
+        m_graphics.SetFaceCullingMode(FaceCulling::Back);
     }
 
     void Renderer::SetMaterial(const Material& material)

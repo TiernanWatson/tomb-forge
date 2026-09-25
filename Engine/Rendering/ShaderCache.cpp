@@ -15,6 +15,8 @@ namespace TombForge
         constexpr char const* LineVertexShaderPath = "Shaders\\PositionColor.vert";
         constexpr char const* ColorFragmentShaderPath = "Shaders\\VertexColorUnlit.frag";
         constexpr char const* GizmoFragmentShaderPath = "Shaders\\UniformColorUnlit.frag";
+        constexpr char const* DepthVertexShaderPath = "Shaders\\Depth.vert";
+        constexpr char const* DepthFragmentShaderPath = "Shaders\\Depth.frag";
     }
 
     bool ShaderCache::Initialize()
@@ -54,6 +56,15 @@ namespace TombForge
         if (m_gizmoShader == nullptr || !m_gizmoShader->GetHandle().IsInitialized())
         {
             LOG_ERROR("Could not compile gizmo shader");
+            allCompiled = false;
+        }
+
+        const std::string depthVertex = FileIO::ReadEntireFile(DepthVertexShaderPath);
+        const std::string depthFragment = FileIO::ReadEntireFile(DepthFragmentShaderPath);
+        m_depthShader = GetOrCreateShader("DepthOnly", depthVertex, depthFragment);
+        if (m_depthShader == nullptr || !m_depthShader->GetHandle().IsInitialized())
+        {
+            LOG_ERROR("Could not compile depth shader");
             allCompiled = false;
         }
 

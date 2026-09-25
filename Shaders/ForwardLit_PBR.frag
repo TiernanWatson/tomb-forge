@@ -39,6 +39,7 @@ uniform int lightIndices[MAX_NUMBER_OF_LIGHT_INDICES];
 uniform int numLights; // Specific to the mesh being rendered
 uniform int metalnessChannel; // 0 = R, 1 = G, 2 = B, 3 = A
 uniform int roughnessChannel; // 0 = R, 1 = G, 2 = B, 3 = A
+uniform mat4 lightSpaceMatrix;
 
 // Shared UBO data for every frame. Must match the renderer struct.
 layout(std140, binding = 1) uniform PerFrameData
@@ -60,6 +61,7 @@ layout(binding = 1) uniform sampler2D normalTexture;
 layout(binding = 2) uniform sampler2D roughnessTexture;
 layout(binding = 3) uniform sampler2D metalnessTexture;
 layout(binding = 4) uniform sampler2D lightsTexture; // Each light takes up 9 texels (point lights only)
+layout(binding = 5) uniform sampler2D shadowMap;
 
 // ---------------------------------------------------------------
 // Cook-Torrance PBR Functions
@@ -104,13 +106,52 @@ vec3 CookTorranceBRDF(vec3 normal, vec3 view, vec3 light, vec3 diffuse, vec3 rad
     float G = GeometrySmith(nDotV, nDotL, roughness);
     vec3 F = FresnelSchlick(hDotV, F0);
     vec3 numerator = NDF * G * F;
-    
+
     float denominator = 4.0 * nDotV * nDotL + 0.0001;
     vec3 specular = numerator / denominator;
     vec3 kS = F;
     vec3 kD = (vec3(1.0) - F) * (1.0 - metalness);
 
     return (kD * diffuse / PI + specular) * radiance * nDotL;
+}
+
+// ---------------------------------------------------------------
+// Shadow Mapping
+// ---------------------------------------------------------------
+
+float CalculateShadow(vec3 normal, vec3 lightDir)
+{
+    vec4 fragPosLightSpace = lightSpaceMatrix * vec4(FragPos, 1.0);
+
+    // Perspective divide and remap to [0, 1] texture space
+    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
+    projCoords = projCoords * 0.5 + 0.5;
+
+    // Outside the light's frustum -> assume fully lit
+    if (projCoords.z > 1.0 || projCoords.x < 0.0 || projCoords.x > 1.0 || projCoords.y < 0.0 || projCoords.y > 1.0)
+    {
+        return 0.0;
+    }
+
+    float currentDepth = projCoords.z;
+
+    // Slope-scaled bias to reduce shadow acne (todo: move out as a setting)
+    float bias = max(0.0025 * (1.0 - dot(normal, lightDir)), 0.0005);
+
+    // 3x3 PCF for soft-ish shadow edges
+    float shadow = 0.0;
+    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
+    for (int x = -1; x <= 1; ++x)
+    {
+        for (int y = -1; y <= 1; ++y)
+        {
+            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
+            shadow += (currentDepth - bias) > pcfDepth ? 1.0 : 0.0;
+        }
+    }
+    shadow /= 9.0; // Average of the 9 samples
+
+    return shadow;
 }
 
 // ---------------------------------------------------------------
@@ -150,7 +191,10 @@ vec3 ProcessDirLight(DirLight instance, vec3 albedo, vec3 normal, vec3 view, vec
     float strength = max(dot(lightDir, normal), 0.0) * instance.strength;
     vec3 radiance = strength * instance.color;
 
-    return CookTorranceBRDF(normal, view, lightDir, albedo, radiance, F0, roughness, metalness);
+    vec3 result = CookTorranceBRDF(normal, view, lightDir, albedo, radiance, F0, roughness, metalness);
+
+    float shadow = CalculateShadow(normal, lightDir);
+    return result * (1.0 - shadow);
 }
 
 // ---------------------------------------------------------------

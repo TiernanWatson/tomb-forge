@@ -57,6 +57,18 @@ namespace TombForge
         }
     };
 
+    struct FramebufferHandle
+    {
+        static uint32_t InvalidFramebufferIndex;
+
+        uint32_t index{ InvalidFramebufferIndex };
+
+        inline bool IsValid() const
+        {
+            return index != InvalidFramebufferIndex;
+        }
+    };
+
     struct Triangle
     {
         glm::vec3 p0{};
@@ -69,6 +81,12 @@ namespace TombForge
         Less,
         LEqual,
         Equal,
+    };
+
+    enum class FaceCulling : uint8_t
+    {
+        Back,
+        Front,
     };
 
     using ShaderLocation = GLuint;
@@ -138,6 +156,14 @@ namespace TombForge
         void BindUbo(const UboHandle& handle, GLuint bindingPoint);
         void DestroyUbo(UboHandle& handle);
 
+        // Framebuffer Functions
+
+        FramebufferHandle CreateDepthFramebuffer(int width, int height); // Depth-only framebuffer for shadow mapping
+        void DestroyFramebuffer(FramebufferHandle& handle);
+        void BindFramebuffer(const FramebufferHandle& handle, int width, int height);
+
+        TextureHandle GetFramebufferDepthTexture(const FramebufferHandle& handle) const;
+
         // Buffer and pipeline
 
         void ResizeFramebuffer(int width, int height);
@@ -149,6 +175,7 @@ namespace TombForge
         void SetColorWriteStatus(bool value);
         void SetDepthFunc(DepthFunc func);
         void SetFaceCulling(bool enabled);
+        void SetFaceCullingMode(FaceCulling mode);
 
         // Shaders
 
@@ -165,6 +192,13 @@ namespace TombForge
             GLuint ibo{};
         };
 
+        struct FramebufferInstance
+        {
+            GLuint fbo{};
+            GLuint depthTexture{};
+            TextureHandle depthTextureHandle{};
+        };
+
         Graphics() = default;
 
         bool CompileShaderPart(const char* source, unsigned int type, unsigned int& outProgramId) const;
@@ -173,6 +207,7 @@ namespace TombForge
         std::vector<GLuint> m_shaders{};
         std::vector<GLuint> m_textures{};
         std::vector<GLuint> m_ubos{};
+        std::vector<FramebufferInstance> m_framebuffers{};
 
         GLuint m_activeShader{};
     };

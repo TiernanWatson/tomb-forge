@@ -133,11 +133,22 @@ namespace TombForge
             ShaderLocation numLights{};
 
             ShaderLocation modelMatrix{};
+
+            ShaderLocation shadowMap{};
+            ShaderLocation lightSpaceMatrix{};
+        };
+
+        struct CachedDepthLocations
+        {
+            ShaderLocation modelMatrix{};
+            ShaderLocation lightSpaceMatrix{};
         };
 
         void InitializeShaders();
 
         void InitializeDefaultTextures();
+
+        void InitializeShadowMap();
 
         void SubmitLightsTexture(const std::vector<PointLight>& lights);
 
@@ -148,6 +159,10 @@ namespace TombForge
             std::vector<uint32_t>& transparent);
 
         void PerformRenderPass(const Level& level, std::vector<uint32_t>& opaque, std::vector<uint32_t>& transparent);
+
+        void RenderShadowPass(const Level& level);
+
+        glm::mat4 ComputeLightSpaceMatrix(const Level& level) const;
 
         void SetMaterial(const Material& material);
 
@@ -187,9 +202,12 @@ namespace TombForge
         Texture m_singleChannelWhite{};
 
         CachedPerDrawLocations m_skinnedLocations{};
+        CachedDepthLocations m_depthLocations{};
 
         glm::mat4 m_viewMatrix{};
         glm::mat4 m_projectionMatrix{};
+
+        glm::mat4 m_lightSpaceMatrix{};
 
         std::vector<uint32_t> m_opaqueQueue{};
         std::vector<uint32_t> m_transparentQueue{};
@@ -197,6 +215,12 @@ namespace TombForge
 
         UboHandle m_bonesUbo{};
         UboHandle m_perFrameUbo{};
+
+        FramebufferHandle m_shadowFramebuffer{};
+        static constexpr int ShadowMapResolution{ 2048 };
+
+        int m_windowWidth{};
+        int m_windowHeight{};
 
         Graphics& m_graphics;
     };

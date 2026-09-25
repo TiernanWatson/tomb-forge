@@ -1,15 +1,10 @@
 #include "Engine/Rendering/Graphics.h"
 
-#include <stdexcept>
-
 #include <glad/glad.h>
 #include <glfw3.h>
 
 #include "Core/Debug.h"
-#include "Core/Graphics/Color.h"
-#include "Core/IO/FileIO.h"
 #include "Engine/Rendering/Model.h"
-#include "Engine/Rendering/Shader.h"
 #include "Engine/Rendering/Texture.h"
 
 namespace TombForge
@@ -57,6 +52,7 @@ namespace TombForge
 
     uint32_t MeshHandle::InvalidMeshIndex = (uint32_t)-1;
     uint32_t TextureHandle::InvalidTextureIndex = (uint32_t)-1;
+    uint32_t FramebufferHandle::InvalidFramebufferIndex = (uint32_t)-1;
 
     Graphics& Graphics::Get()
     {
@@ -534,6 +530,88 @@ namespace TombForge
         handle.index = UINT16_MAX;
     }
 
+    FramebufferHandle Graphics::CreateDepthFramebuffer(int width, int height)
+    {
+        GLuint fbo{};
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        GLuint depthTexture{};
+        glGenTextures(1, &depthTexture);
+        glBindTexture(GL_TEXTURE_2D, depthTexture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        constexpr float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor); // In case we sample outside of shadow map
+
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthTexture, 0);
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+
+        const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE)
+        {
+            LOG_ERROR("Depth framebuffer is incomplete: %u", status);
+            glDeleteTextures(1, &depthTexture);
+            glDeleteFramebuffers(1, &fbo);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return {};
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        m_textures.emplace_back(depthTexture);
+        const TextureHandle depthTextureHandle{ static_cast<uint32_t>(m_textures.size() - 1) };
+
+        m_framebuffers.emplace_back(fbo, depthTexture, depthTextureHandle);
+
+        LoopGLErrors();
+
+        return FramebufferHandle{ static_cast<uint32_t>(m_framebuffers.size() - 1) };
+    }
+
+    void Graphics::DestroyFramebuffer(FramebufferHandle& handle)
+    {
+        if (!handle.IsValid())
+        {
+            return;
+        }
+
+        FramebufferInstance& instance = m_framebuffers[handle.index];
+        glDeleteFramebuffers(1, &instance.fbo);
+
+        TextureHandle depthHandle = instance.depthTextureHandle;
+        DestroyTextureInstance(depthHandle);
+
+        handle.index = FramebufferHandle::InvalidFramebufferIndex;
+    }
+
+    void Graphics::BindFramebuffer(const FramebufferHandle& handle, int width, int height)
+    {
+        if (handle.IsValid())
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, m_framebuffers[handle.index].fbo);
+        }
+        else
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        }
+
+        glViewport(0, 0, width, height);
+    }
+
+    TextureHandle Graphics::GetFramebufferDepthTexture(const FramebufferHandle& handle) const
+    {
+        if (!handle.IsValid())
+        {
+            return {};
+        }
+        return m_framebuffers[handle.index].depthTextureHandle;
+    }
+
     void Graphics::ResizeFramebuffer(int width, int height)
     {
         glViewport(0, 0, width, height);
@@ -598,6 +676,23 @@ namespace TombForge
         else
         {
             glDisable(GL_CULL_FACE);
+        }
+        LoopGLErrors();
+    }
+
+    void Graphics::SetFaceCullingMode(FaceCulling mode)
+    {
+        switch (mode)
+        {
+        case FaceCulling::Back:
+            glCullFace(GL_BACK);
+            break;
+        case FaceCulling::Front:
+            glCullFace(GL_FRONT);
+            break;
+        default:
+            LOG_ERROR("Unsupported face culling mode %i", mode);
+            break;
         }
         LoopGLErrors();
     }
