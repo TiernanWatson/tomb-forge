@@ -311,6 +311,8 @@ namespace TombForge
 
                 auto& bodies = ctx.physics.system->GetBodyInterface();
                 instance.bodyId = CreateBody(bodies, ledgeBox, JPH::EMotionType::Static, d.data, true);
+
+                instance.direction = glm::cross(glm::vec3{ 0.0f, 1.0f, 0.0f }, glm::normalize(next.point - instance.point));
             }
         }
 

@@ -41,7 +41,6 @@ if (!(condition)) { \
 }
 
 #define DEBUG_INIT() ::TombForge::Debug::Init();
-
 #define DEBUG_CLEAR() ::TombForge::Debug::Clear();
 
 #else
@@ -51,6 +50,7 @@ if (!(condition)) { \
 #define LOG_ERROR
 #define ASSERT
 #define DEBUG_INIT
+#define DEBUG_CLEAR
 
 #endif
 

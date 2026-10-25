@@ -4,11 +4,15 @@
 
 #include "Engine/Player/Input.h"
 #include "Engine/Player/LaraController.h"
+#include "Engine/Physics/PhysicsInterface.h"
 
 namespace TombForge
 {
-    static constexpr float CorrectionLerpRate = 15.0f;
-    static constexpr float ClimbUpTransitionTime = 5.0f; // TODO: Make configurable per animation
+    namespace
+    {
+        constexpr float CorrectionLerpRate = 15.0f;
+        constexpr float ClimbUpTransitionTime = 5.0f; // TODO: Make configurable per animation
+    }
 
     ClimbState::ClimbState(const glm::vec3& grabOffset, const glm::vec3& hangOffset)
         : m_grabOffset{ grabOffset }, m_hangOffset{ hangOffset }
@@ -17,7 +21,15 @@ namespace TombForge
 
     void ClimbState::Begin(LaraController& lara)
     {
-        lara.SetPosition(lara.GetNearestLedgePoint() + m_grabOffset);
+        // The grab offset is for a ledge facing +Z, so rotate it to match the correct direction
+        glm::vec3 ledgeForward = lara.GetLevel()->ledges[lara.GetLedge()].direction;
+        ledgeForward.y = 0.0f;
+        ledgeForward = glm::length(ledgeForward) > 1e-5f ? glm::normalize(ledgeForward) : glm::vec3{ 0.0f, 0.0f, 1.0f };
+
+        const glm::quat ledgeRotation = glm::quatLookAt(-ledgeForward, glm::vec3{ 0.0f, 1.0f, 0.0f });
+
+        const glm::vec3 ledgeNearestPoint = lara.GetNearestLedgePoint();
+        lara.SetPosition(ledgeNearestPoint + ledgeRotation * m_grabOffset);
         lara.SetRootMotion(RootMotionMode::On);
         lara.SetCollidesWithWorld(false);
         m_wantsClimbUp = false;

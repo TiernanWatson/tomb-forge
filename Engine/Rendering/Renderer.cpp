@@ -35,9 +35,10 @@ namespace TombForge
 
         constexpr int SSAOKernelSize{ 64 };
         constexpr int SSAONoiseSize{ 4 };
-        constexpr int NumLinesPerBox = 12;
+        constexpr int NumLinesPerBox{ 12 };
+        constexpr int ShadowMapResolution{ 2048 };
 
-        constexpr glm::mat4 IdentityMatrix = glm::mat4(1.0f);
+        constexpr glm::mat4 IdentityMatrix{ 1.0f };
 
         constexpr char const* SkinnedVertexShaderPath = "Shaders\\SkinnedMesh.vert";
         constexpr char const* PBRFragmentShaderPath = "Shaders\\ForwardLit_PBR.frag";

@@ -254,7 +254,6 @@ namespace TombForge
         UboHandle m_perFrameUbo{};
 
         FramebufferHandle m_shadowFramebuffer{};
-        static constexpr int ShadowMapResolution{ 2048 };
 
         FramebufferHandle m_gBuffer{};
         FramebufferHandle m_ssaoFramebuffer{};

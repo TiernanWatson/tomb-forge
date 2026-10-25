@@ -20,7 +20,8 @@ namespace TombForge
         constexpr float ShortJumpGravityMultiplier{ 1.5f };
         constexpr float TerminalVelocity{ -50.0f };
         constexpr float LedgeGrabRayStep{ 0.25f };
-        constexpr float LedgeGrabRayDistance{ 8.0f };
+        constexpr float LedgeGrabRayDistance{ 12.0f };
+        constexpr float LedgeGrabStartHeight{ -2.0f };
 
         // Returns time to reach target, and sets velocityXZ and velocityY
         bool TryCalculateLedgeJump(
@@ -90,7 +91,7 @@ namespace TombForge
         if (lara.GetAnimPlayer().IsAnimation("JumpForwardL"))
         {
             auto& physics = lara.GetPhysics();
-            for (float height = 0.0f; height <= m_jumpHeight; height += LedgeGrabRayStep)
+            for (float height = LedgeGrabStartHeight; height <= m_jumpHeight; height += LedgeGrabRayStep)
             {
                 const glm::vec3 rayOrigin = laraPosition + glm::vec3{ 0.0f, height, 0.0f };
                 const glm::vec3 rayDirection = laraForward * LedgeGrabRayDistance;
@@ -112,7 +113,7 @@ namespace TombForge
                     const glm::vec3 ledgeDir = glm::normalize(ledgeEnd - ledgeStart);
                     
                     // Calculate intersection of ledge line and ray line, derived from 2D line equations
-                    float numerator = ledgeDir.x * (laraPosition.z - ledgeStart.z) - ledgeDir.z * (laraPosition.x + ledgeStart.x);
+                    float numerator = ledgeDir.x * (laraPosition.z - ledgeStart.z) - ledgeDir.z * (laraPosition.x - ledgeStart.x);
                     float denominator = laraForward.x * ledgeDir.z - laraForward.z * ledgeDir.x;
                     float intersectionT = numerator / denominator;
                     if (intersectionT > 0.0f) // Only consider points in front of Lara
@@ -120,10 +121,12 @@ namespace TombForge
                         glm::vec3 ledgePosition = laraPosition + laraForward * intersectionT;
                         ledgePosition.y = ledgeStart.y;
                         ledgePosition += reachOffset;
+
                         if (TryCalculateLedgeJump(laraPosition, ledgePosition, laraForward, m_gravity, speedXZ, speedY, time))
                         {
                             m_isReaching = true;
                             m_grabTime = time;
+                            lara.SetLedge(colliderData.index);
                             break;
                         }
                     }
