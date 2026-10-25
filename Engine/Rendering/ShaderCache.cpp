@@ -17,6 +17,11 @@ namespace TombForge
         constexpr char const* GizmoFragmentShaderPath = "Shaders\\UniformColorUnlit.frag";
         constexpr char const* DepthVertexShaderPath = "Shaders\\Depth.vert";
         constexpr char const* DepthFragmentShaderPath = "Shaders\\Depth.frag";
+        constexpr char const* GBufferVertexShaderPath = "Shaders\\GBuffer.vert";
+        constexpr char const* GBufferFragmentShaderPath = "Shaders\\GBuffer.frag";
+        constexpr char const* FullscreenTriangleVertexShaderPath = "Shaders\\FullscreenTriangle.vert";
+        constexpr char const* SSAOFragmentShaderPath = "Shaders\\SSAO.frag";
+        constexpr char const* SSAOBlurFragmentShaderPath = "Shaders\\SSAOBlur.frag";
     }
 
     bool ShaderCache::Initialize()
@@ -65,6 +70,33 @@ namespace TombForge
         if (m_depthShader == nullptr || !m_depthShader->GetHandle().IsInitialized())
         {
             LOG_ERROR("Could not compile depth shader");
+            allCompiled = false;
+        }
+
+        const std::string gBufferVertex = FileIO::ReadEntireFile(GBufferVertexShaderPath);
+        const std::string gBufferFragment = FileIO::ReadEntireFile(GBufferFragmentShaderPath);
+        m_gBufferShader = GetOrCreateShader("GBuffer", gBufferVertex, gBufferFragment);
+        if (m_gBufferShader == nullptr || !m_gBufferShader->GetHandle().IsInitialized())
+        {
+            LOG_ERROR("Could not compile gbuffer shader");
+            allCompiled = false;
+        }
+
+        const std::string fullscreenTriangleVertex = FileIO::ReadEntireFile(FullscreenTriangleVertexShaderPath);
+
+        const std::string ssaoFragment = FileIO::ReadEntireFile(SSAOFragmentShaderPath);
+        m_ssaoShader = GetOrCreateShader("SSAO", fullscreenTriangleVertex, ssaoFragment);
+        if (m_ssaoShader == nullptr || !m_ssaoShader->GetHandle().IsInitialized())
+        {
+            LOG_ERROR("Could not compile SSAO shader");
+            allCompiled = false;
+        }
+
+        const std::string ssaoBlurFragment = FileIO::ReadEntireFile(SSAOBlurFragmentShaderPath);
+        m_ssaoBlurShader = GetOrCreateShader("SSAOBlur", fullscreenTriangleVertex, ssaoBlurFragment);
+        if (m_ssaoBlurShader == nullptr || !m_ssaoBlurShader->GetHandle().IsInitialized())
+        {
+            LOG_ERROR("Could not compile SSAO blur shader");
             allCompiled = false;
         }
 

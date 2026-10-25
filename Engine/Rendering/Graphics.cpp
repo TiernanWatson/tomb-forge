@@ -89,6 +89,18 @@ namespace TombForge
         }
     }
 
+    void Graphics::SetBlend(bool enabled)
+    {
+        if (enabled)
+        {
+            glEnable(GL_BLEND);
+        }
+        else
+        {
+            glDisable(GL_BLEND);
+        }
+    }
+
     MeshHandle Graphics::CreateMeshInstance(const Mesh& mesh)
     {
         if (m_meshes.size() >= (MeshHandle::InvalidMeshIndex - 1))
@@ -409,6 +421,17 @@ namespace TombForge
         glUniform1f(location, value);
     }
 
+    void Graphics::SetVec2(const std::string& name, glm::vec2 value)
+    {
+        GLuint id = glGetUniformLocation(m_activeShader, name.c_str());
+        glUniform2f(id, value.x, value.y);
+    }
+
+    void Graphics::SetVec2(ShaderLocation location, const glm::vec2& value)
+    {
+        glUniform2f(location, value.x, value.y);
+    }
+
     void Graphics::SetVec3(const std::string& name, glm::vec3 value)
     {
         GLuint id = glGetUniformLocation(m_activeShader, name.c_str());
@@ -573,6 +596,108 @@ namespace TombForge
         return FramebufferHandle{ static_cast<uint32_t>(m_framebuffers.size() - 1) };
     }
 
+    FramebufferHandle Graphics::CreateGBuffer(int width, int height)
+    {
+        GLuint fbo{};
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        FramebufferInstance instance{};
+        instance.fbo = fbo;
+        instance.numColorAttachments = 2;
+
+        // Attachment 0 = position, Attachment 1 = normal, view-space
+        const GLenum internalFormats[2] = { GL_RGBA32F, GL_RGBA16F };
+        for (int i = 0; i < 2; i++)
+        {
+            GLuint tex{};
+            glGenTextures(1, &tex);
+            glBindTexture(GL_TEXTURE_2D, tex);
+            glTexImage2D(GL_TEXTURE_2D, 0, internalFormats[i], width, height, 0, GL_RGBA, GL_FLOAT, nullptr);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, tex, 0);
+
+            m_textures.emplace_back(tex);
+            instance.colorTextures[i] = tex;
+            instance.colorTextureHandles[i] = TextureHandle{ static_cast<uint32_t>(m_textures.size() - 1) };
+        }
+
+        GLuint depthRenderbuffer{};
+        glGenRenderbuffers(1, &depthRenderbuffer);
+        glBindRenderbuffer(GL_RENDERBUFFER, depthRenderbuffer);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT32F, width, height);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depthRenderbuffer);
+        instance.depthRenderbuffer = depthRenderbuffer;
+
+        const GLenum drawBuffers[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+        glDrawBuffers(2, drawBuffers);
+
+        const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE)
+        {
+            LOG_ERROR("GBuffer framebuffer incomplete: %u", status);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return {};
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        m_framebuffers.emplace_back(instance);
+
+        LoopGLErrors();
+
+        return FramebufferHandle{ static_cast<uint32_t>(m_framebuffers.size() - 1) };
+    }
+
+    FramebufferHandle Graphics::CreateColorFramebuffer(int width, int height, bool singleChannel)
+    {
+        GLuint fbo{};
+        glGenFramebuffers(1, &fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+        FramebufferInstance instance{};
+        instance.fbo = fbo;
+        instance.numColorAttachments = 1;
+
+        GLuint tex{};
+        glGenTextures(1, &tex);
+        glBindTexture(GL_TEXTURE_2D, tex);
+        const GLenum internalFormat = singleChannel ? GL_R16F : GL_RGB16F;
+        const GLenum format = singleChannel ? GL_RED : GL_RGB;
+        glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, format, GL_FLOAT, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex, 0);
+
+        glDrawBuffer(GL_COLOR_ATTACHMENT0);
+        glReadBuffer(GL_NONE);
+
+        m_textures.emplace_back(tex);
+        instance.colorTextures[0] = tex;
+        instance.colorTextureHandles[0] = TextureHandle{ static_cast<uint32_t>(m_textures.size() - 1) };
+
+        const GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+        if (status != GL_FRAMEBUFFER_COMPLETE)
+        {
+            LOG_ERROR("Color framebuffer is incomplete: %u", status);
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            return {};
+        }
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        m_framebuffers.emplace_back(instance);
+
+        LoopGLErrors();
+
+        return FramebufferHandle{ static_cast<uint32_t>(m_framebuffers.size() - 1) };
+    }
+
     void Graphics::DestroyFramebuffer(FramebufferHandle& handle)
     {
         if (!handle.IsValid())
@@ -583,8 +708,25 @@ namespace TombForge
         FramebufferInstance& instance = m_framebuffers[handle.index];
         glDeleteFramebuffers(1, &instance.fbo);
 
+        if (instance.depthRenderbuffer)
+        {
+            glDeleteRenderbuffers(1, &instance.depthRenderbuffer);
+        }
+
         TextureHandle depthHandle = instance.depthTextureHandle;
-        DestroyTextureInstance(depthHandle);
+        if (depthHandle.IsValid())
+        {
+            DestroyTextureInstance(depthHandle);
+        }
+
+        for (int i = 0; i < instance.numColorAttachments; i++)
+        {
+            TextureHandle colorHandle = instance.colorTextureHandles[i];
+            if (colorHandle.IsValid())
+            {
+                DestroyTextureInstance(colorHandle);
+            }
+        }
 
         handle.index = FramebufferHandle::InvalidFramebufferIndex;
     }
@@ -610,6 +752,28 @@ namespace TombForge
             return {};
         }
         return m_framebuffers[handle.index].depthTextureHandle;
+    }
+
+    TextureHandle Graphics::GetFramebufferColorTexture(const FramebufferHandle& handle, int attachmentIndex) const
+    {
+        if (!handle.IsValid())
+        {
+            return {};
+        }
+        return m_framebuffers[handle.index].colorTextureHandles[attachmentIndex];
+    }
+
+    void Graphics::DrawFullscreenTriangle()
+    {
+        if (m_fullscreenTriangleVao == 0)
+        {
+            glGenVertexArrays(1, &m_fullscreenTriangleVao);
+        }
+
+        glBindVertexArray(m_fullscreenTriangleVao);
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+
+        LoopGLErrors();
     }
 
     void Graphics::ResizeFramebuffer(int width, int height)

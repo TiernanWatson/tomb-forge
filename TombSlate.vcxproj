@@ -262,6 +262,13 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
+    <None Include="Shaders\Depth.frag" />
+    <None Include="Shaders\Depth.vert" />
+    <None Include="Shaders\FullscreenTriangle.vert" />
+    <None Include="Shaders\GBuffer.frag" />
+    <None Include="Shaders\GBuffer.vert" />
+    <None Include="Shaders\SSAO.frag" />
+    <None Include="Shaders\SSAOBlur.frag" />
     <None Include="Shaders\StaticMesh.vert">
       <FileType>Document</FileType>
     </None>

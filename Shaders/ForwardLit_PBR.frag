@@ -62,6 +62,10 @@ layout(binding = 2) uniform sampler2D roughnessTexture;
 layout(binding = 3) uniform sampler2D metalnessTexture;
 layout(binding = 4) uniform sampler2D lightsTexture; // Each light takes up 9 texels (point lights only)
 layout(binding = 5) uniform sampler2D shadowMap;
+layout(binding = 6) uniform sampler2D ssaoTexture;
+
+uniform vec2 screenSize;
+uniform bool ssaoEnabled;
 
 // ---------------------------------------------------------------
 // Cook-Torrance PBR Functions
@@ -227,8 +231,15 @@ void main()
     }
     lights += ProcessDirLight(dirLight, albedo, normal, view, F0, roughness, metalness);
 
+    float ao = 1.0;
+    if (ssaoEnabled)
+    {
+        vec2 ssaoUV = gl_FragCoord.xy / screenSize;
+        ao = texture(ssaoTexture, ssaoUV).r;
+    }
+
     vec3 ambient = ambientStrength * ambientColor;
-    vec3 final = ambient + lights;
+    vec3 final = (ambient + lights) * ao;
     final = final / (final + vec3(1.0)); // HDR tonemapping
 
     FragColor = vec4(final, albedoTex.a);

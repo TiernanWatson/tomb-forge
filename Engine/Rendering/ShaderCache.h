@@ -29,6 +29,9 @@ namespace TombForge
         ShaderInstance* GetDepthShader() const { return m_depthShader; }
         ShaderInstance* GetLineShader() const { return m_lineShader; }
         ShaderInstance* GetGizmoShader() const { return m_gizmoShader; }
+        ShaderInstance* GetGBufferShader() const { return m_gBufferShader; }
+        ShaderInstance* GetSSAOShader() const { return m_ssaoShader; }
+        ShaderInstance* GetSSAOBlurShader() const { return m_ssaoBlurShader; }
 
         static ShaderCache& Get()
         {
@@ -42,6 +45,9 @@ namespace TombForge
         ShaderInstance* m_depthShader{};
         ShaderInstance* m_lineShader{};
         ShaderInstance* m_gizmoShader{};
+        ShaderInstance* m_gBufferShader{};
+        ShaderInstance* m_ssaoShader{};
+        ShaderInstance* m_ssaoBlurShader{};
 
         std::unordered_map<std::string, ShaderInstance> m_shaderCache{};
     };

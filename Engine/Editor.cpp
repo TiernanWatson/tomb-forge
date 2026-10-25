@@ -172,28 +172,28 @@ namespace TombForge
                 {
                     if (mesh.material->albedoTexture && !mesh.material->albedoTexture->IsValid())
                     {
-                        const std::string albedoPath = folder + mesh.material->albedoTexture->name + TextureFileExt;
+                        const std::string albedoPath = folder + FileIO::Separator + mesh.material->albedoTexture->name + TextureFileExt;
                         reg.AddAsset(mesh.material->albedoTexture, albedoPath, "");
                     }
 
                     if (mesh.material->normalTexture && !mesh.material->normalTexture->IsValid())
                     {
-                        const std::string normalPath = folder + mesh.material->normalTexture->name + TextureFileExt;
+                        const std::string normalPath = folder + FileIO::Separator + mesh.material->normalTexture->name + TextureFileExt;
                         reg.AddAsset(mesh.material->normalTexture, normalPath, "");
                     }
 
                     if (mesh.material->metalnessTexture && !mesh.material->metalnessTexture->IsValid())
                     {
-                        const std::string metalnessPath = folder + mesh.material->metalnessTexture->name + TextureFileExt;
+                        const std::string metalnessPath = folder + FileIO::Separator + mesh.material->metalnessTexture->name + TextureFileExt;
                         reg.AddAsset(mesh.material->metalnessTexture, metalnessPath, "");
                     }
 
-                    const std::string materialPath = folder + mesh.material->name + MaterialFileExt;
+                    const std::string materialPath = folder + FileIO::Separator + mesh.material->name + MaterialFileExt;
                     reg.AddAsset(mesh.material, materialPath, "");
                 }
             }
 
-            const std::string modelPath = folder + model->name + ModelFileExt;
+            const std::string modelPath = folder + FileIO::Separator + model->name + ModelFileExt;
             reg.AddAsset(model, modelPath, "");
         }
 
@@ -1299,6 +1299,7 @@ namespace TombForge
         ImGui::SeparatorText("Keyframes");
         static int s_bone{};
         ImGui::InputInt("Bone", &s_bone);
+        ImGui::Text("Positions");
         for (size_t i = 0; i < anim->keys[s_bone].positions.size(); i++)
         {
             auto& key = anim->keys[s_bone].positions[i];
@@ -1331,7 +1332,6 @@ namespace TombForge
             }
             ImGui::PopID();
         }
-
         if (ImGui::Button("Add Keyframe"))
         {
             PositionKey newKey{};
@@ -1342,6 +1342,8 @@ namespace TombForge
             anim->keys[s_bone].positions.emplace_back(newKey);
             anim->isDirty = true;
         }
+        ImGui::Text("Rotations count: %zu", anim->keys[s_bone].rotations.size());
+        ImGui::Text("Scales count: %zu", anim->keys[s_bone].scales.size());
 
         if (ImGui::Button("Save"))
         {

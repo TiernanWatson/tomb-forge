@@ -5,6 +5,7 @@
 #include <vector>
 
 #include <glad/glad.h>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
@@ -126,6 +127,9 @@ namespace TombForge
         void SetFloat(const std::string& name, float value);
         void SetFloat(ShaderLocation location, float value);
 
+        void SetVec2(const std::string& name, glm::vec2 value);
+        void SetVec2(ShaderLocation location, const glm::vec2& value);
+
         void SetVec3(const std::string& name, glm::vec3 value);
         void SetVec3(ShaderLocation location, const glm::vec3& value);
 
@@ -159,10 +163,16 @@ namespace TombForge
         // Framebuffer Functions
 
         FramebufferHandle CreateDepthFramebuffer(int width, int height); // Depth-only framebuffer for shadow mapping
+        FramebufferHandle CreateGBuffer(int width, int height); // View-space position + normal, for SSAO
+        FramebufferHandle CreateColorFramebuffer(int width, int height, bool singleChannel); // For SSAO output/blur
         void DestroyFramebuffer(FramebufferHandle& handle);
         void BindFramebuffer(const FramebufferHandle& handle, int width, int height);
 
         TextureHandle GetFramebufferDepthTexture(const FramebufferHandle& handle) const;
+        TextureHandle GetFramebufferColorTexture(const FramebufferHandle& handle, int attachmentIndex = 0) const;
+
+        // Draws a single fullscreen triangle with no bound vertex data (used for post-process passes like SSAO)
+        void DrawFullscreenTriangle();
 
         // Buffer and pipeline
 
@@ -176,6 +186,7 @@ namespace TombForge
         void SetDepthFunc(DepthFunc func);
         void SetFaceCulling(bool enabled);
         void SetFaceCullingMode(FaceCulling mode);
+        void SetBlend(bool enabled);
 
         // Shaders
 
@@ -197,6 +208,10 @@ namespace TombForge
             GLuint fbo{};
             GLuint depthTexture{};
             TextureHandle depthTextureHandle{};
+            GLuint depthRenderbuffer{};
+            GLuint colorTextures[2]{};
+            TextureHandle colorTextureHandles[2]{};
+            int numColorAttachments{};
         };
 
         Graphics() = default;
@@ -210,6 +225,7 @@ namespace TombForge
         std::vector<FramebufferInstance> m_framebuffers{};
 
         GLuint m_activeShader{};
+        GLuint m_fullscreenTriangleVao{};
     };
 }
 

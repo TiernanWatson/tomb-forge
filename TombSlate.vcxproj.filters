@@ -381,6 +381,13 @@
     <None Include="packages.config" />
     <None Include="Shaders\UniformColorUnlit.frag" />
     <None Include="Shaders\ForwardLit_PBR.frag" />
+    <None Include="Shaders\Depth.frag" />
+    <None Include="Shaders\Depth.vert" />
+    <None Include="Shaders\FullscreenTriangle.vert" />
+    <None Include="Shaders\GBuffer.vert" />
+    <None Include="Shaders\GBuffer.frag" />
+    <None Include="Shaders\SSAO.frag" />
+    <None Include="Shaders\SSAOBlur.frag" />
   </ItemGroup>
   <ItemGroup>
     <Natvis Include="ThirdParty\imgui\misc\debuggers\imgui.natvis" />

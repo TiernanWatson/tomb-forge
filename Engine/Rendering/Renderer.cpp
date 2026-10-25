@@ -1,5 +1,7 @@
 #include "Engine/Rendering/Renderer.h"
 
+#include <random>
+
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -31,6 +33,8 @@ namespace TombForge
             float pad1{}; // Padding to ensure 16 byte alignment
         };
 
+        constexpr int SSAOKernelSize{ 64 };
+        constexpr int SSAONoiseSize{ 4 };
         constexpr int NumLinesPerBox = 12;
 
         constexpr glm::mat4 IdentityMatrix = glm::mat4(1.0f);
@@ -86,6 +90,7 @@ namespace TombForge
         InitializeShaders();
         InitializeDefaultTextures();
         InitializeShadowMap();
+        InitializeSSAO();
 
         m_bonesUbo = m_graphics.CreateUbo();
         m_perFrameUbo = m_graphics.CreateUbo();
@@ -124,6 +129,26 @@ namespace TombForge
         if (m_shadowFramebuffer.IsValid())
         {
             m_graphics.DestroyFramebuffer(m_shadowFramebuffer);
+        }
+
+        if (m_gBuffer.IsValid())
+        {
+            m_graphics.DestroyFramebuffer(m_gBuffer);
+        }
+
+        if (m_ssaoFramebuffer.IsValid())
+        {
+            m_graphics.DestroyFramebuffer(m_ssaoFramebuffer);
+        }
+
+        if (m_ssaoBlurFramebuffer.IsValid())
+        {
+            m_graphics.DestroyFramebuffer(m_ssaoBlurFramebuffer);
+        }
+
+        if (m_ssaoNoiseTexture.gpuHandle.IsValid())
+        {
+            m_graphics.DestroyTextureInstance(m_ssaoNoiseTexture.gpuHandle);
         }
     }
 
@@ -206,15 +231,6 @@ namespace TombForge
 
     void Renderer::RenderLevel(const Level& level, const Lara& lara, const Camera& camera)
     {
-        // Shadow pass: render the scene from the directional light's perspective to create a shadow map
-        m_lightSpaceMatrix = ComputeLightSpaceMatrix(level);
-        RenderShadowPass(level);
-
-        // Restore the default framebuffer after the shadow pass
-        m_graphics.BindFramebuffer(FramebufferHandle{}, m_windowWidth, m_windowHeight);
-
-        m_graphics.UseShader(m_skinnedShader->GetHandle());
-
         m_viewMatrix = glm::inverse(camera.transform.AsMatrix());
         m_projectionMatrix = glm::perspective(camera.fovY, camera.aspect, camera.near, camera.far);
 
@@ -231,6 +247,23 @@ namespace TombForge
         m_graphics.UpdateUbo(m_perFrameUbo, &perFrameData, sizeof(PerFrameData));
         m_graphics.BindUbo(m_perFrameUbo, 1); // Binding point 1 for per-frame data
 
+        // Shadow pass: render the scene from the directional light's perspective to create a shadow map
+        m_lightSpaceMatrix = ComputeLightSpaceMatrix(level);
+        RenderShadowPass(level);
+
+        // G-buffer + SSAO passes: build view-space position/normal buffers, then compute ambient occlusion
+        if (m_ssaoEnabled)
+        {
+            RenderGBufferPass(level, lara);
+            RenderSSAOPass();
+        }
+
+        // Restore the default framebuffer after the shadow and SSAO passes
+        m_graphics.BindFramebuffer(FramebufferHandle{}, m_windowWidth, m_windowHeight);
+
+        m_graphics.UseShader(m_skinnedShader->GetHandle());
+        m_graphics.BindUbo(m_perFrameUbo, 1); // Rebind as UseShader may have reset state on some drivers
+
         if (m_lightsTexture.gpuHandle.IsValid())
         {
             m_graphics.SetTexture(m_skinnedLocations.lights, m_lightsTexture.gpuHandle, 4);
@@ -238,6 +271,13 @@ namespace TombForge
 
         m_graphics.SetMatrix4(m_skinnedLocations.lightSpaceMatrix, m_lightSpaceMatrix);
         m_graphics.SetTexture(m_skinnedLocations.shadowMap, m_graphics.GetFramebufferDepthTexture(m_shadowFramebuffer), 5);
+
+        m_graphics.SetInt(m_skinnedLocations.ssaoEnabled, m_ssaoEnabled ? 1 : 0);
+        m_graphics.SetVec2(m_skinnedLocations.screenSize, glm::vec2{ static_cast<float>(m_windowWidth), static_cast<float>(m_windowHeight) });
+        if (m_ssaoEnabled)
+        {
+            m_graphics.SetTexture(m_skinnedLocations.ssaoTexture, m_graphics.GetFramebufferColorTexture(m_ssaoBlurFramebuffer), 6);
+        }
 
         Frustum cameraPlanes{};
         ExtractCameraPlanes(cameraPlanes, m_projectionMatrix * m_viewMatrix);
@@ -281,6 +321,23 @@ namespace TombForge
         m_windowWidth = width;
         m_windowHeight = height;
         m_graphics.ResizeFramebuffer(width, height);
+
+        if (m_gBuffer.IsValid())
+        {
+            m_graphics.DestroyFramebuffer(m_gBuffer);
+        }
+        if (m_ssaoFramebuffer.IsValid())
+        {
+            m_graphics.DestroyFramebuffer(m_ssaoFramebuffer);
+        }
+        if (m_ssaoBlurFramebuffer.IsValid())
+        {
+            m_graphics.DestroyFramebuffer(m_ssaoBlurFramebuffer);
+        }
+
+        m_gBuffer = m_graphics.CreateGBuffer(width, height);
+        m_ssaoFramebuffer = m_graphics.CreateColorFramebuffer(width, height, true);
+        m_ssaoBlurFramebuffer = m_graphics.CreateColorFramebuffer(width, height, true);
     }
 
     bool Renderer::InitializeModel(Model& model)
@@ -392,6 +449,9 @@ namespace TombForge
         m_depthShader = ShaderCache::Get().GetDepthShader();
         m_lineShader = ShaderCache::Get().GetLineShader();
         m_gizmoShader = ShaderCache::Get().GetGizmoShader();
+        m_gBufferShader = ShaderCache::Get().GetGBufferShader();
+        m_ssaoShader = ShaderCache::Get().GetSSAOShader();
+        m_ssaoBlurShader = ShaderCache::Get().GetSSAOBlurShader();
         m_graphics.UseShader(m_skinnedShader->GetHandle());
 
         m_skinnedShader->CacheLocations({
@@ -416,7 +476,10 @@ namespace TombForge
             "lightIndices[7]",
             "model",
             "shadowMap",
-            "lightSpaceMatrix"
+            "lightSpaceMatrix",
+            "ssaoTexture",
+            "screenSize",
+            "ssaoEnabled"
             });
 
         m_skinnedLocations.albedoTexture = m_skinnedShader->GetLocation("diffuseTexture");
@@ -445,6 +508,10 @@ namespace TombForge
 
         m_skinnedLocations.shadowMap = m_skinnedShader->GetLocation("shadowMap");
         m_skinnedLocations.lightSpaceMatrix = m_skinnedShader->GetLocation("lightSpaceMatrix");
+
+        m_skinnedLocations.ssaoTexture = m_skinnedShader->GetLocation("ssaoTexture");
+        m_skinnedLocations.screenSize = m_skinnedShader->GetLocation("screenSize");
+        m_skinnedLocations.ssaoEnabled = m_skinnedShader->GetLocation("ssaoEnabled");
 
         m_depthShader->CacheLocations({
             "model",
@@ -497,6 +564,191 @@ namespace TombForge
     void Renderer::InitializeShadowMap()
     {
         m_shadowFramebuffer = m_graphics.CreateDepthFramebuffer(ShadowMapResolution, ShadowMapResolution);
+    }
+
+    void Renderer::InitializeSSAO()
+    {
+        m_gBuffer = m_graphics.CreateGBuffer(m_windowWidth, m_windowHeight);
+        m_ssaoFramebuffer = m_graphics.CreateColorFramebuffer(m_windowWidth, m_windowHeight, true);
+        m_ssaoBlurFramebuffer = m_graphics.CreateColorFramebuffer(m_windowWidth, m_windowHeight, true);
+
+        // Generate hemisphere sample kernel
+        std::uniform_real_distribution<float> randomFloats(0.0f, 1.0f);
+        std::default_random_engine generator{};
+
+        m_ssaoKernel.clear();
+        m_ssaoKernel.reserve(SSAOKernelSize);
+        for (int i = 0; i < SSAOKernelSize; i++)
+        {
+            glm::vec3 sample{
+                randomFloats(generator) * 2.0f - 1.0f,
+                randomFloats(generator) * 2.0f - 1.0f,
+                randomFloats(generator)
+            };
+            sample = glm::normalize(sample);
+            sample *= randomFloats(generator);
+
+            float scale = static_cast<float>(i) / static_cast<float>(SSAOKernelSize);
+            scale = 0.1f + (scale * scale) * 0.9f; // Lerp towards edges of hemisphere
+            sample *= scale;
+
+            m_ssaoKernel.emplace_back(sample);
+        }
+
+        // Generate noise texture used to randomly rotate the sample kernel per-pixel
+        std::vector<float> noiseData{};
+        noiseData.reserve(SSAONoiseSize * SSAONoiseSize * 3);
+        for (int i = 0; i < SSAONoiseSize * SSAONoiseSize; i++)
+        {
+            noiseData.emplace_back(randomFloats(generator) * 2.0f - 1.0f);
+            noiseData.emplace_back(randomFloats(generator) * 2.0f - 1.0f);
+            noiseData.emplace_back(0.0f); // Rotate only around the z-axis (tangent space)
+        }
+
+        m_ssaoNoiseTexture.width = SSAONoiseSize;
+        m_ssaoNoiseTexture.height = SSAONoiseSize;
+        m_ssaoNoiseTexture.format = TextureFormat::RGB;
+        m_ssaoNoiseTexture.type = TextureDataType::Float;
+        m_ssaoNoiseTexture.filter = TextureFilter::Nearest;
+        m_ssaoNoiseTexture.sRGB = false;
+        m_ssaoNoiseTexture.data.resize(noiseData.size() * sizeof(float));
+        memcpy(m_ssaoNoiseTexture.data.data(), noiseData.data(), noiseData.size() * sizeof(float));
+        m_ssaoNoiseTexture.gpuHandle = m_graphics.CreateTextureInstance(m_ssaoNoiseTexture);
+
+        m_ssaoShader->CacheLocations({
+            "kernelSize",
+            "radius",
+            "bias",
+            "noiseScale",
+            "projection",
+            "gPosition",
+            "gNormal",
+            "noiseTexture"
+            });
+        m_ssaoLocations.kernelSize = m_ssaoShader->GetLocation("kernelSize");
+        m_ssaoLocations.radius = m_ssaoShader->GetLocation("radius");
+        m_ssaoLocations.bias = m_ssaoShader->GetLocation("bias");
+        m_ssaoLocations.noiseScale = m_ssaoShader->GetLocation("noiseScale");
+        m_ssaoLocations.projection = m_ssaoShader->GetLocation("projection");
+        m_ssaoLocations.gPosition = m_ssaoShader->GetLocation("gPosition");
+        m_ssaoLocations.gNormal = m_ssaoShader->GetLocation("gNormal");
+        m_ssaoLocations.noiseTexture = m_ssaoShader->GetLocation("noiseTexture");
+
+        for (int i = 0; i < SSAOKernelSize; i++)
+        {
+            m_ssaoLocations.samples[i] = m_ssaoShader->GetLocation("samples[" + std::to_string(i) + "]");
+        }
+
+        m_gBufferShader->CacheLocations({ "model" });
+        m_gBufferLocations.modelMatrix = m_gBufferShader->GetLocation("model");
+    }
+
+    void Renderer::RenderGBufferPass(const Level& level, const Lara& lara)
+    {
+        if (!m_gBuffer.IsValid())
+        {
+            return;
+        }
+
+        m_graphics.BindFramebuffer(m_gBuffer, m_windowWidth, m_windowHeight);
+        m_graphics.ClearFrameBuffer();
+
+        // Blending MUST be disabled as we only write RGB and A is undefined
+        m_graphics.SetBlend(false);
+
+        m_graphics.UseShader(m_gBufferShader->GetHandle());
+        m_graphics.BindUbo(m_perFrameUbo, 1);
+
+        m_graphics.UpdateUbo(m_bonesUbo, m_boneMatrixBuffer.data(), m_boneMatrixBuffer.size() * sizeof(glm::mat4));
+        m_graphics.BindUbo(m_bonesUbo, 0);
+
+        for (const auto& meshInfo : level.meshes)
+        {
+            if (meshInfo.model >= level.models.size() || meshInfo.mesh >= level.models[meshInfo.model]->meshes.size())
+            {
+                continue;
+            }
+
+            const auto& mesh = level.models[meshInfo.model]->meshes[meshInfo.mesh];
+            if (!mesh.isActive || !mesh.gpuHandle.IsValid())
+            {
+                continue;
+            }
+
+            const auto material = meshInfo.overrideMaterial ? meshInfo.overrideMaterial.get() : mesh.material.get();
+            if (material && material->TestFlag(MATERIAL_FLAG_TRANSPARENT))
+            {
+                continue;
+            }
+
+            m_graphics.SetMatrix4(m_gBufferLocations.modelMatrix, meshInfo.modelMatrix);
+            m_graphics.DrawMesh(mesh.gpuHandle);
+        }
+
+        if (lara.model)
+        {
+            m_graphics.UpdateUbo(m_bonesUbo, lara.animPlayer.FinalBoneMatrices().data(), lara.animPlayer.FinalBoneMatrices().size() * sizeof(glm::mat4));
+            m_graphics.BindUbo(m_bonesUbo, 0);
+
+            Transform finalTransform = lara.transform;
+            finalTransform.rotation *= glm::quat(lara.modelRotationOffset);
+
+            m_graphics.SetMatrix4(m_gBufferLocations.modelMatrix, finalTransform.AsMatrix());
+            for (const auto& mesh : lara.model->meshes)
+            {
+                if (!mesh.isActive || !mesh.gpuHandle.IsValid())
+                {
+                    continue;
+                }
+                m_graphics.DrawMesh(mesh.gpuHandle);
+            }
+        }
+
+        m_graphics.SetBlend(true);
+    }
+
+    void Renderer::RenderSSAOPass()
+    {
+        if (!m_ssaoFramebuffer.IsValid() || !m_ssaoBlurFramebuffer.IsValid())
+        {
+            return;
+        }
+
+        m_graphics.BindFramebuffer(m_ssaoFramebuffer, m_windowWidth, m_windowHeight);
+        m_graphics.SetDepthTest(false);
+        m_graphics.SetBlend(false);
+
+        m_graphics.UseShader(m_ssaoShader->GetHandle());
+
+        m_graphics.SetTexture(m_ssaoLocations.gPosition, m_graphics.GetFramebufferColorTexture(m_gBuffer, 0), 0);
+        m_graphics.SetTexture(m_ssaoLocations.gNormal, m_graphics.GetFramebufferColorTexture(m_gBuffer, 1), 1);
+        m_graphics.SetTexture(m_ssaoLocations.noiseTexture, m_ssaoNoiseTexture.gpuHandle, 2);
+
+        for (int i = 0; i < SSAOKernelSize; i++)
+        {
+            m_graphics.SetVec3(m_ssaoLocations.samples[i], m_ssaoKernel[i]);
+        }
+        m_graphics.SetInt(m_ssaoLocations.kernelSize, SSAOKernelSize);
+        m_graphics.SetFloat(m_ssaoLocations.radius, m_ssaoRadius);
+        m_graphics.SetFloat(m_ssaoLocations.bias, m_ssaoBias);
+        m_graphics.SetVec2(m_ssaoLocations.noiseScale, glm::vec2{
+            static_cast<float>(m_windowWidth) / static_cast<float>(SSAONoiseSize),
+            static_cast<float>(m_windowHeight) / static_cast<float>(SSAONoiseSize)
+            });
+        m_graphics.SetMatrix4(m_ssaoLocations.projection, m_projectionMatrix);
+
+        m_graphics.DrawFullscreenTriangle();
+
+        // Blur the texture to reduce noise artifacts
+        m_graphics.BindFramebuffer(m_ssaoBlurFramebuffer, m_windowWidth, m_windowHeight);
+
+        m_graphics.UseShader(m_ssaoBlurShader->GetHandle());
+        m_graphics.SetTexture(m_ssaoBlurShader->GetLocation("ssaoInput"), m_graphics.GetFramebufferColorTexture(m_ssaoFramebuffer), 0);
+
+        m_graphics.DrawFullscreenTriangle();
+
+        m_graphics.SetDepthTest(true);
+        m_graphics.SetBlend(true);
     }
 
     void Renderer::SubmitLightsTexture(const std::vector<PointLight>& lights)

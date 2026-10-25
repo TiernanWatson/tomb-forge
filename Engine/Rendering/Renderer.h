@@ -111,6 +111,9 @@ namespace TombForge
         void DrawOctree(const glm::vec4& color, const Camera& camera, uint32_t contains = UINT32_MAX);
 
         void DrawBox(const AABB& aabb, const glm::vec4& color, const Camera& camera);
+
+        void SetSSAOEnabled(bool enabled) { m_ssaoEnabled = enabled; }
+        bool GetSSAOEnabled() const { return m_ssaoEnabled; }
 #endif
 
     private:
@@ -136,6 +139,10 @@ namespace TombForge
 
             ShaderLocation shadowMap{};
             ShaderLocation lightSpaceMatrix{};
+
+            ShaderLocation ssaoTexture{};
+            ShaderLocation screenSize{};
+            ShaderLocation ssaoEnabled{};
         };
 
         struct CachedDepthLocations
@@ -144,11 +151,35 @@ namespace TombForge
             ShaderLocation lightSpaceMatrix{};
         };
 
+        struct CachedGBufferLocations
+        {
+            ShaderLocation modelMatrix{};
+        };
+
+        struct CachedSSAOLocations
+        {
+            ShaderLocation samples[64]{};
+            ShaderLocation kernelSize{};
+            ShaderLocation radius{};
+            ShaderLocation bias{};
+            ShaderLocation noiseScale{};
+            ShaderLocation projection{};
+            ShaderLocation gPosition{};
+            ShaderLocation gNormal{};
+            ShaderLocation noiseTexture{};
+        };
+
         void InitializeShaders();
 
         void InitializeDefaultTextures();
 
         void InitializeShadowMap();
+
+        void InitializeSSAO();
+
+        void RenderGBufferPass(const Level& level, const Lara& lara);
+
+        void RenderSSAOPass();
 
         void SubmitLightsTexture(const std::vector<PointLight>& lights);
 
@@ -194,15 +225,21 @@ namespace TombForge
         ShaderInstance* m_lineShader{};
         ShaderInstance* m_gizmoShader{};
         ShaderInstance* m_depthShader{};
+        ShaderInstance* m_gBufferShader{};
+        ShaderInstance* m_ssaoShader{};
+        ShaderInstance* m_ssaoBlurShader{};
 
         Texture m_lightsTexture{};
         Texture m_whiteTexture{};
         Texture m_magentaTexture{};
         Texture m_flatNormal{};
         Texture m_singleChannelWhite{};
+        Texture m_ssaoNoiseTexture{};
 
         CachedPerDrawLocations m_skinnedLocations{};
         CachedDepthLocations m_depthLocations{};
+        CachedGBufferLocations m_gBufferLocations{};
+        CachedSSAOLocations m_ssaoLocations{};
 
         glm::mat4 m_viewMatrix{};
         glm::mat4 m_projectionMatrix{};
@@ -218,6 +255,16 @@ namespace TombForge
 
         FramebufferHandle m_shadowFramebuffer{};
         static constexpr int ShadowMapResolution{ 2048 };
+
+        FramebufferHandle m_gBuffer{};
+        FramebufferHandle m_ssaoFramebuffer{};
+        FramebufferHandle m_ssaoBlurFramebuffer{};
+
+        std::vector<glm::vec3> m_ssaoKernel{};
+
+        float m_ssaoRadius{ 0.5f };
+        float m_ssaoBias{ 0.025f };
+        bool m_ssaoEnabled{ true };
 
         int m_windowWidth{};
         int m_windowHeight{};
